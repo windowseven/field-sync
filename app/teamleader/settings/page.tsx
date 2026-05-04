@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -7,14 +8,103 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Settings, Bell, User, Globe, Shield, Clock, LogOut, Loader2, ShieldCheck } from 'lucide-react'
+import { Settings, Bell, User, Globe, Shield, Clock, LogOut, Loader2, ShieldCheck, Play, Square, Megaphone, Send } from 'lucide-react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/api/swr-fetcher'
 import { ThemeSettingsCard } from '@/components/shared/settings/theme-settings-card'
+import { http } from '@/lib/api/httpClient'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
 
 export default function SettingsPage() {
   const { data: profileData, error: profileError } = useSWR('/auth/profile', fetcher)
   const { data: teamData } = useSWR('/team/my/members', fetcher)
+  const { data: statsData } = useSWR('/team/stats', fetcher)
+
+  const [sessionActive, setSessionActive] = useState(false)
+  const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [announcementTitle, setAnnouncementTitle] = useState('')
+  const [announcementMessage, setAnnouncementMessage] = useState('')
+  const [sendingAnnouncement, setSendingAnnouncement] = useState(false)
+
+  useEffect(() => {
+    const session = statsData?.data?.session
+    if (session?.active && session?.startedAt) {
+      setSessionActive(true)
+      setSessionStartedAt(session.startedAt)
+      setElapsedSeconds(Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000))
+    } else {
+      setSessionActive(false)
+      setSessionStartedAt(null)
+      setElapsedSeconds(0)
+    }
+  }, [statsData])
+
+  useEffect(() => {
+    if (!sessionActive) return
+    const baseTime = sessionStartedAt ? new Date(sessionStartedAt).getTime() : Date.now() - elapsedSeconds * 1000
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - baseTime) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [sessionActive, sessionStartedAt])
+
+  const handleStartSession = async () => {
+    setIsUpdating(true)
+    try {
+      await http.post('/team/session', { action: 'start' })
+      setSessionActive(true)
+      setSessionStartedAt(new Date().toISOString())
+      setElapsedSeconds(0)
+      toast.success('Team session started')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to start session')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleEndSession = async () => {
+    setIsUpdating(true)
+    try {
+      await http.post('/team/session', { action: 'end' })
+      setSessionActive(false)
+      setSessionStartedAt(null)
+      setElapsedSeconds(0)
+      toast.success('Team session ended')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to end session')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleSendAnnouncement = async () => {
+    if (!announcementTitle.trim() || !announcementMessage.trim()) {
+      toast.error('Title and message are required')
+      return
+    }
+    setSendingAnnouncement(true)
+    try {
+      await http.post('/team/announcement', { title: announcementTitle.trim(), message: announcementMessage.trim() })
+      toast.success('Announcement sent to team')
+      setAnnouncementTitle('')
+      setAnnouncementMessage('')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to send announcement')
+    } finally {
+      setSendingAnnouncement(false)
+    }
+  }
 
   const isLoading = !profileData && !profileError
   const user = profileData?.user || profileData || {}
@@ -124,10 +214,16 @@ export default function SettingsPage() {
             <div>
               <Label className="text-xs font-bold uppercase text-muted-foreground mb-3 block">Deployment Status</Label>
               <div className="flex items-baseline gap-2">
-                <div className="text-4xl font-black text-emerald-600 tracking-tighter transition-all tabular-nums">04:23:17</div>
-                <Badge variant="secondary" className="animate-pulse bg-emerald-100 text-emerald-700 border-none">ACTIVE</Badge>
+                <div className={cn('text-4xl font-black tracking-tighter transition-all tabular-nums', sessionActive ? 'text-emerald-600' : 'text-muted-foreground')}>
+                  {formatDuration(elapsedSeconds)}
+                </div>
+                <Badge variant="secondary" className={cn('border-none', sessionActive ? 'animate-pulse bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground')}>
+                  {sessionActive ? 'ACTIVE' : 'STOPPED'}
+                </Badge>
               </div>
-              <p className="text-xs text-muted-foreground mt-2 font-medium">Session initialized 09:30 AM (UTC+1)</p>
+              <p className="text-xs text-muted-foreground mt-2 font-medium">
+                {sessionActive ? `Session started ${new Date(sessionStartedAt!).toLocaleTimeString()}` : 'No active session'}
+              </p>
             </div>
             <div className="flex items-center justify-between pt-4 border-t border-primary/5">
               <div className="space-y-0.5">
@@ -157,12 +253,65 @@ export default function SettingsPage() {
                 <ShieldCheck className="h-4 w-4 mr-2 text-primary" />
                 Audit Logs
               </Button>
-              <Button variant="destructive" className="font-bold text-xs h-10 shadow-md">
-                <LogOut className="h-4 w-4 mr-2" />
-                End Session
-              </Button>
+              {sessionActive ? (
+                <Button variant="destructive" className="font-bold text-xs h-10 shadow-md" onClick={handleEndSession} disabled={isUpdating}>
+                  {isUpdating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Square className="h-4 w-4 mr-2 fill-current" />}
+                  End Session
+                </Button>
+              ) : (
+                <Button className="font-bold text-xs h-10 shadow-md" onClick={handleStartSession} disabled={isUpdating}>
+                  {isUpdating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
+                  Start Session
+                </Button>
+              )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Team Communication */}
+      <Card className="border-primary/10 shadow-md">
+        <CardHeader className="bg-primary/5">
+          <CardTitle className="flex items-center gap-2">
+            <Megaphone className="h-5 w-5 text-primary" />
+            Team Communication
+          </CardTitle>
+          <CardDescription>Send announcements to your team members</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          <div className="space-y-2">
+            <Label htmlFor="announcement-title" className="text-xs font-bold uppercase text-muted-foreground">Announcement Title</Label>
+            <Input
+              id="announcement-title"
+              placeholder="e.g., Schedule Change, Safety Reminder"
+              value={announcementTitle}
+              onChange={(e) => setAnnouncementTitle(e.target.value)}
+              className="bg-muted/30"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="announcement-message" className="text-xs font-bold uppercase text-muted-foreground">Message</Label>
+            <textarea
+              id="announcement-message"
+              placeholder="Type your announcement..."
+              value={announcementMessage}
+              onChange={(e) => setAnnouncementMessage(e.target.value)}
+              rows={4}
+              className="w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+            />
+          </div>
+          <Button
+            className="w-full shadow-sm"
+            onClick={handleSendAnnouncement}
+            disabled={sendingAnnouncement || !announcementTitle.trim() || !announcementMessage.trim()}
+          >
+            {sendingAnnouncement ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4 mr-2" />
+            )}
+            Send to Team
+          </Button>
         </CardContent>
       </Card>
 

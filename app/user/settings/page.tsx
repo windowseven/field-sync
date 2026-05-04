@@ -12,12 +12,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { userService, type ApiUser } from '@/lib/api/userService'
+import { teamService, type ApiMyTeamInfo } from '@/lib/api/teamService'
 import { ThemeSettingsCard } from '@/components/shared/settings/theme-settings-card'
 
 export default function UserSettingsPage() {
   const [user, setUser] = useState<ApiUser | null>(null)
+  const [teamInfo, setTeamInfo] = useState<ApiMyTeamInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [locationSharing, setLocationSharing] = useState(true)
   const [notifications, setNotifications] = useState(true)
@@ -31,12 +34,16 @@ export default function UserSettingsPage() {
   const fetchProfile = async () => {
     try {
       setLoading(true)
-      const data = await userService.getProfile()
-      if (data) {
-        setUser(data)
-        setLocationSharing(data.location_sharing_enabled ?? true)
-        setNotifications(data.notifications_enabled ?? true)
+      const [profileData, teamData] = await Promise.all([
+        userService.getProfile(),
+        teamService.getMyTeamMembers().catch(() => null),
+      ])
+      if (profileData) {
+        setUser(profileData)
+        setLocationSharing(profileData.location_sharing_enabled ?? true)
+        setNotifications(profileData.notifications_enabled ?? true)
       }
+      setTeamInfo(teamData)
     } catch (error) {
       console.error('Failed to fetch profile:', error)
     } finally {
@@ -44,9 +51,22 @@ export default function UserSettingsPage() {
     }
   }
 
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const handleSave = async () => {
+    try {
+      await userService.getProfile()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      console.error('Failed to save:', error)
+    }
+  }
+
+  const teamLeader = teamInfo?.members.find((m) => m.is_team_leader)
+  const roleLabels: Record<string, string> = {
+    field_agent: 'Field Agent',
+    team_leader: 'Team Leader',
+    supervisor: 'Supervisor',
+    admin: 'Admin',
   }
 
   return (
@@ -57,7 +77,7 @@ export default function UserSettingsPage() {
         breadcrumbs={[{ label: 'Settings' }]}
       />
       <main className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="mx-auto max-w-2xl space-y-6">
+        <div className="mx-auto max-w-7xl space-y-6">
 
           {/* Header */}
           <div>
@@ -70,8 +90,9 @@ export default function UserSettingsPage() {
           {/* Profile card */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <User className="h-4 w-4 text-primary" /> Profile Info
+              <CardTitle className="text-base flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" />
+                Profile Info
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -83,43 +104,43 @@ export default function UserSettingsPage() {
                 <>
                   {/* Avatar row */}
                   <div className="flex items-center gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-xl font-bold text-primary shrink-0">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-lg font-semibold text-primary shrink-0">
                       {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
                     </div>
                     <div>
-                      <p className="font-bold">{user?.name || 'User'}</p>
+                      <p className="font-semibold">{user?.name || 'User'}</p>
                       <p className="text-sm text-muted-foreground">{user?.email || 'email@example.com'}</p>
-                      <Badge variant="secondary" className="text-[10px] mt-1">Field Agent</Badge>
+                      <Badge variant="secondary" className="mt-1 text-xs">
+                        {roleLabels[user?.role || 'field_agent'] || 'Field Agent'}
+                      </Badge>
                     </div>
                   </div>
 
                   <Separator />
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Full Name</Label>
+                    <div className="space-y-2">
+                      <Label>Full Name</Label>
                       <Input defaultValue={user?.name || ''} className="h-10" />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Phone</Label>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
                       <Input defaultValue={user?.phone || ''} className="h-10" />
                     </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Email</Label>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Email</Label>
                       <Input defaultValue={user?.email || ''} type="email" className="h-10" disabled />
                     </div>
                   </div>
                 </>
               )}
 
-              {/* Read-only field info */}
+              {/* Team info */}
               <div className="rounded-lg bg-muted/50 p-3 space-y-2">
                 {[
-                  { label: 'Assigned Zone', value: 'TBD' },
-                  { label: 'Project', value: 'TBD' },
-                  { label: 'Team', value: 'TBD' },
-                  { label: 'Team Leader', value: 'TBD' },
-                  { label: 'Device ID', value: 'TBD' },
+                  { label: 'Assigned Zone', value: user?.assigned_zone || 'Not assigned' },
+                  { label: 'Team', value: teamInfo?.team?.name || 'Not assigned' },
+                  { label: 'Team Leader', value: teamLeader?.name || 'Not assigned' },
                 ].map((row) => (
                   <div key={row.label} className="flex justify-between text-xs">
                     <span className="text-muted-foreground">{row.label}</span>
@@ -137,32 +158,35 @@ export default function UserSettingsPage() {
           {/* Change password */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Lock className="h-4 w-4 text-primary" /> Change Password
+              <CardTitle className="text-base flex items-center gap-2">
+                <Lock className="h-5 w-5 text-primary" />
+                Change Password
               </CardTitle>
+              <CardDescription>Update your account password</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Current Password</Label>
+              <div className="space-y-2">
+                <Label>Current Password</Label>
                 <div className="relative">
-                  <Input type={showPassword ? 'text' : 'password'} placeholder="••••••••" className="h-10 pr-10" />
+                  <Input type={showPassword ? 'text' : 'password'} placeholder="Enter current password" className="h-10 pr-10" />
                   <button
+                    type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Password</Label>
-                <Input type="password" placeholder="••••••••" className="h-10" />
+              <div className="space-y-2">
+                <Label>New Password</Label>
+                <Input type="password" placeholder="Enter new password" className="h-10" />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Confirm New Password</Label>
-                <Input type="password" placeholder="••••••••" className="h-10" />
+              <div className="space-y-2">
+                <Label>Confirm New Password</Label>
+                <Input type="password" placeholder="Confirm new password" className="h-10" />
               </div>
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 w-full sm:w-auto">
                 <Lock className="h-4 w-4" /> Update Password
               </Button>
             </CardContent>
@@ -171,8 +195,9 @@ export default function UserSettingsPage() {
           {/* Privacy & Location */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" /> Privacy & Location
+              <CardTitle className="text-base flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" />
+                Privacy & Location
               </CardTitle>
               <CardDescription>Control how your data is shared</CardDescription>
             </CardHeader>
@@ -198,7 +223,7 @@ export default function UserSettingsPage() {
                 },
               ].map((pref) => (
                 <div key={pref.id} className={cn(
-                  'flex items-start justify-between gap-4 rounded-lg p-3 border',
+                  'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border p-3',
                   pref.warn ? 'border-amber-500/30 bg-amber-500/5' : 'border-border'
                 )}>
                   <div className="flex items-start gap-3">
@@ -206,27 +231,16 @@ export default function UserSettingsPage() {
                       <pref.icon className="h-4 w-4 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">{pref.label}</p>
+                      <p className="text-sm font-medium">{pref.label}</p>
                       <p className="text-xs text-muted-foreground">{pref.desc}</p>
                       {pref.warn && (
-                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
                           Your team can&apos;t see your position
                         </p>
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => pref.set(!pref.value)}
-                    className={cn(
-                      'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors',
-                      pref.value ? 'bg-primary' : 'bg-muted-foreground/30'
-                    )}
-                  >
-                    <span className={cn(
-                      'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                      pref.value ? 'translate-x-5' : 'translate-x-1'
-                    )} />
-                  </button>
+                  <Switch checked={pref.value} onCheckedChange={pref.set} className="self-start sm:self-auto" />
                 </div>
               ))}
             </CardContent>
@@ -235,16 +249,16 @@ export default function UserSettingsPage() {
           {/* Device & Session */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-primary" /> Device & Session
+              <CardTitle className="text-base flex items-center gap-2">
+                <Smartphone className="h-5 w-5 text-primary" />
+                Device & Session
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="rounded-lg bg-muted/50 p-3 space-y-2 text-xs">
                 {[
-                  { label: 'Device ID', value: 'TBD' },
                   { label: 'App Version', value: 'FieldSync v1.0.0' },
-                  { label: 'Last Sync', value: 'Just now' },
+                  { label: 'Last Sync', value: user?.last_seen ? new Date(user.last_seen).toLocaleString() : 'Just now' },
                 ].map((row) => (
                   <div key={row.label} className="flex justify-between">
                     <span className="text-muted-foreground">{row.label}</span>
@@ -263,4 +277,3 @@ export default function UserSettingsPage() {
     </>
   )
 }
-

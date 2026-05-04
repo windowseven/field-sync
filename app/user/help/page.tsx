@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   HelpCircle, Users, Calendar, Send, CheckCircle2,
-  XCircle, Clock, MessageCircle, Plus,
+  XCircle, Clock, MessageCircle, Plus, Loader2,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -63,6 +63,23 @@ export default function UserHelpPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <>
+        <DashboardHeader
+          title="Request Help"
+          rootCrumb={{ label: 'Field', href: '/user/home' }}
+          breadcrumbs={[{ label: 'Request Help' }]}
+        />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="mx-auto max-w-7xl flex items-center justify-center h-[60vh]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
+      </>
+    )
+  }
+
   return (
     <>
       <DashboardHeader
@@ -71,7 +88,7 @@ export default function UserHelpPage() {
         breadcrumbs={[{ label: 'Request Help' }]}
       />
       <main className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="mx-auto max-w-7xl space-y-6">
 
           {/* Header */}
           <div>
@@ -85,7 +102,7 @@ export default function UserHelpPage() {
               <CardContent className="p-4 flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Request sent!</p>
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Request sent!</p>
                   <p className="text-xs text-muted-foreground">Your team leader will respond shortly.</p>
                 </div>
               </CardContent>
@@ -95,15 +112,15 @@ export default function UserHelpPage() {
           {/* New Request */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Plus className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base flex items-center gap-2">
+                <Plus className="h-5 w-5 text-primary" />
                 New Request
               </CardTitle>
               <CardDescription>What kind of help do you need?</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Type selector */}
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {(Object.entries(requestTypeConfig) as [HelpRequestType, typeof requestTypeConfig[HelpRequestType]][]).map(([type, cfg]) => {
                   const Icon = cfg.icon
                   const isSelected = selectedType === type
@@ -112,7 +129,7 @@ export default function UserHelpPage() {
                       key={type}
                       onClick={() => setSelectedType(isSelected ? null : type)}
                       className={cn(
-                        'flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-all',
+                        'flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-all',
                         isSelected
                           ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
                           : 'border-border hover:bg-muted/50'
@@ -121,16 +138,16 @@ export default function UserHelpPage() {
                       <div className={cn('flex h-8 w-8 items-center justify-center rounded-md', cfg.bg)}>
                         <Icon className={cn('h-4 w-4', cfg.color)} />
                       </div>
-                      <p className={cn('text-xs font-semibold', isSelected && 'text-primary')}>{cfg.label}</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">{cfg.desc}</p>
+                      <p className={cn('text-sm font-medium', isSelected && 'text-primary')}>{cfg.label}</p>
+                      <p className="text-xs text-muted-foreground leading-tight">{cfg.desc}</p>
                     </button>
                   )
                 })}
               </div>
 
               {/* Message */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Message</Label>
+              <div className="space-y-2">
+                <Label>Message</Label>
                 <Textarea
                   placeholder={
                     selectedType === 'help'
@@ -158,56 +175,71 @@ export default function UserHelpPage() {
           </Card>
 
           {/* Request History */}
-          <section className="space-y-3">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
-              Recent Requests
-            </h2>
-            {!loading && requests.map((req) => {
-              const tc = requestTypeConfig[req.type]
-              const sc = statusConfig[req.status]
-              const StatusIcon = sc.icon
-              return (
-                <Card key={req.id}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg shrink-0', tc.bg)}>
-                        <tc.icon className={cn('h-4 w-4', tc.color)} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold">{tc.label}</p>
-                          <Badge className={cn('text-[10px] px-1.5 border-0 gap-1 shrink-0', sc.bg, sc.color)}>
-                            <StatusIcon className="h-3 w-3" /> {sc.label}
-                          </Badge>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-primary" />
+                Recent Requests
+              </CardTitle>
+              <CardDescription>Your help request history</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {requests.length > 0 ? requests.map((req) => {
+                  const tc = requestTypeConfig[req.type] || requestTypeConfig.help
+                  const sc = statusConfig[req.status] || statusConfig.pending
+                  const StatusIcon = sc.icon
+                  return (
+                    <div key={req.id} className="rounded-lg border p-4 hover:bg-muted/40 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg shrink-0', tc.bg)}>
+                          <tc.icon className={cn('h-4 w-4', tc.color)} />
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">{req.message}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">Sent at {new Date(req.created_at).toLocaleString()}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-medium">{tc.label}</p>
+                            <Badge className={cn('text-xs px-2 border-0 gap-1 shrink-0', sc.bg, sc.color)}>
+                              <StatusIcon className="h-3 w-3" /> {sc.label}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1 break-words line-clamp-2">{req.message}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {new Date(req.created_at).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    {req.response_note && (
-                      <div className={cn(
-                        'rounded-lg p-3 text-xs border-l-2',
-                        req.status === 'accepted'
-                          ? 'bg-emerald-500/5 border-emerald-500'
-                          : 'bg-muted/50 border-muted-foreground'
-                      )}>
-                        <p className="font-semibold mb-0.5">{req.response_from ?? 'Supervisor'} replied:</p>
-                        <p className="text-muted-foreground">{req.response_note}</p>
-                        {req.response_at && (
-                          <p className="text-[10px] text-muted-foreground mt-1">at {new Date(req.response_at).toLocaleString()}</p>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </section>
+                      {req.response_note && (
+                        <div className={cn(
+                          'rounded-lg p-3 text-sm border-l-2 mt-3',
+                          req.status === 'accepted'
+                            ? 'bg-emerald-500/5 border-emerald-500'
+                            : 'bg-muted/50 border-muted-foreground'
+                        )}>
+                          <p className="font-medium mb-0.5">{req.response_from ?? 'Supervisor'} replied:</p>
+                          <p className="text-muted-foreground">{req.response_note}</p>
+                          {req.response_at && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(req.response_at).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }) : (
+                  <div className="col-span-full flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                    <HelpCircle className="h-8 w-8 mb-2 opacity-40" />
+                    <p className="text-sm">No help requests</p>
+                    <p className="text-xs mt-1">Your request history will appear here</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
         </div>
       </main>
     </>
   )
 }
-

@@ -48,4 +48,28 @@ export const taskService = {
       createdAt: task.created_at,
     };
   },
+
+  async create(data: {
+    project_id: string;
+    title: string;
+    description?: string;
+    assigned_to?: string;
+    priority?: string;
+    deadline?: string;
+    mode?: string;
+    status?: string;
+  }): Promise<ApiTask> {
+    const response = await http.post<any>('/tasks', data);
+    return response?.data?.task ?? response?.data?.data?.task;
+  },
+
+  async update(id: string, data: {
+    status?: string;
+    assigned_to?: string;
+    priority?: string;
+    deadline?: string;
+  }): Promise<ApiTask> {
+    const response = await http.patch<any>(`/tasks/${id}`, data);
+    return response?.data?.task ?? response?.data?.data?.task;
+  },
 };

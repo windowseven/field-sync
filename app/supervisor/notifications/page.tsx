@@ -4,6 +4,7 @@ import * as React from 'react'
 import {
   Bell, AlertTriangle, CheckCircle2, Info, MessageSquare,
   ClipboardList, Users, Trash2, CheckCheck, Filter, Radio,
+  FileText, Shield, MapPin, FolderOpen, HelpCircle,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,12 +15,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-
-type NotifType = 'alert' | 'success' | 'info' | 'message' | 'submission' | 'system'
+import { notificationService, type ApiNotification } from '@/lib/api/notificationService'
 
 interface Notification {
   id: string
-  type: NotifType
+  type: string
   title: string
   description: string
   from?: string
@@ -27,37 +27,57 @@ interface Notification {
   unread: boolean
 }
 
-const notifications: Notification[] = [
-  { id: '1', type: 'alert', title: 'Help Request: Zone C GPS Issue', description: 'Team Beta agent Osei Mensah is reporting GPS signal failure in northern Zone C boundary.', from: 'Osei Mensah · Team Beta', time: '2m ago', unread: true },
-  { id: '2', type: 'submission', title: 'Form Batch Received', description: 'Team Alpha submitted 22 forms from Zone A sector 3. Pending your review.', from: 'Team Alpha', time: '15m ago', unread: true },
-  { id: '3', type: 'alert', title: 'Inactive Agent Detected', description: 'Sule Bah has been idle in Zone E for 42 minutes. Last known position: coords -1.305, 36.856.', from: 'System', time: '18m ago', unread: true },
-  { id: '4', type: 'message', title: 'Message from James Kariuki', description: 'Hi, Team Beta has completed the northern half of Zone C. We need reassignment to Zone D soon.', from: 'James Kariuki · Team Beta Leader', time: '1h ago', unread: true },
-  { id: '5', type: 'success', title: 'Task Completed', description: 'GPS calibration check has been marked as completed by Amara Diallo.', from: 'Amara Diallo · Team Gamma Leader', time: '2h ago', unread: false },
-  { id: '6', type: 'submission', title: 'New Member Submission', description: 'Tewodros Bekele submitted 3 household surveys. Total: 19 submissions.', from: 'Tewodros Bekele · Team Alpha', time: '3h ago', unread: false },
-  { id: '7', type: 'alert', title: 'Zone Overlap Warning', description: 'Zone C and Zone B have agents in overlapping areas. Review zone boundaries to avoid duplicate data.', from: 'System', time: '4h ago', unread: false },
-  { id: '8', type: 'info', title: 'Daily Field Summary', description: 'Today: 48 submissions · 39 agents active · 5 zones covered · No critical incidents.', from: 'System', time: '6h ago', unread: false },
-  { id: '9', type: 'message', title: 'Message from Chioma Obi', description: 'Team Delta needs 2 more members. Zone F is larger than expected. Can we get reinforcements?', from: 'Chioma Obi · Team Delta Leader', time: '8h ago', unread: false },
-  { id: '10', type: 'success', title: 'Zone H Survey Complete', description: 'Team Echo has achieved 100% coverage of Zone H. Market Survey form completed with 28 submissions.', from: 'Team Echo', time: '1d ago', unread: false },
-]
-
-const typeConfig: Record<NotifType, { icon: React.ElementType; color: string; bg: string; label: string }> = {
+const typeConfig: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
   alert: { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'Alert' },
   success: { icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10', label: 'Success' },
   info: { icon: Info, color: 'text-primary', bg: 'bg-primary/10', label: 'Info' },
   message: { icon: MessageSquare, color: 'text-chart-2', bg: 'bg-chart-2/10', label: 'Message' },
   submission: { icon: ClipboardList, color: 'text-chart-3', bg: 'bg-chart-3/10', label: 'Submission' },
   system: { icon: Radio, color: 'text-muted-foreground', bg: 'bg-muted', label: 'System' },
+  task: { icon: ClipboardList, color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'Task' },
+  form: { icon: FileText, color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Form' },
+  audit: { icon: Shield, color: 'text-purple-500', bg: 'bg-purple-500/10', label: 'Audit' },
+  team: { icon: Users, color: 'text-cyan-500', bg: 'bg-cyan-500/10', label: 'Team' },
+  location: { icon: MapPin, color: 'text-orange-500', bg: 'bg-orange-500/10', label: 'Location' },
+  project: { icon: FolderOpen, color: 'text-indigo-500', bg: 'bg-indigo-500/10', label: 'Project' },
+  security: { icon: Shield, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Security' },
+  help: { icon: HelpCircle, color: 'text-violet-500', bg: 'bg-violet-500/10', label: 'Help' },
+  warning: { icon: AlertTriangle, color: 'text-yellow-500', bg: 'bg-yellow-500/10', label: 'Warning' },
 }
 
 export default function SupervisorNotificationsPage() {
-  const [notifs, setNotifs] = React.useState(notifications)
+  const [notifs, setNotifs] = React.useState<Notification[]>([])
   const [filter, setFilter] = React.useState('all')
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setLoading(true)
+        const data = await notificationService.getAll()
+        const transformed = data.map((n: ApiNotification) => ({
+          id: n.id,
+          type: (n.type || 'info') as string,
+          title: n.title,
+          description: n.body,
+          from: n.sender_name || 'System',
+          time: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          unread: !n.is_read,
+        }))
+        setNotifs(transformed)
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchNotifications()
+  }, [])
 
   const unread = notifs.filter(n => n.unread)
   const filtered = filter === 'all' ? notifs : filter === 'unread' ? notifs.filter(n => n.unread) : notifs.filter(n => n.type === filter)
 
   function markAllRead() {
-    setNotifs(prev => prev.map(n => ({ ...n, unread: false })))
   }
 
   function markRead(id: string) {
@@ -137,7 +157,7 @@ export default function SupervisorNotificationsPage() {
                 </CardContent>
               </Card>
             ) : filtered.map(notif => {
-              const cfg = typeConfig[notif.type]
+              const cfg = typeConfig[notif.type] || typeConfig.info
               const Icon = cfg.icon
               return (
                 <Card key={notif.id} className={cn('transition-colors', notif.unread && 'border-primary/30 bg-primary/5')}>

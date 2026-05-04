@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { teamService } from '@/lib/api/teamService'
+import { haversineDistance, formatDistance } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { Users2, MapPin, Clock, Activity, Phone, Mail, ExternalLink, Loader2 } from 'lucide-react'
 
@@ -23,18 +24,25 @@ interface TeamMember {
   sessionActive?: boolean
   currentActivity?: string
   location?: string
+  lat?: number
+  lng?: number
   distanceFromLeader?: number
   lastSeen?: string
   tasksCompleted?: number
   formsSubmitted?: number
+  accuracy?: number | null
+  locationUpdatedAt?: string
 }
 
 export default function TeamMembersPage() {
   const router = useRouter()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
+  const [noTeam, setNoTeam] = useState(false)
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null)
   const [open, setOpen] = useState(false)
+  const [leaderLat, setLeaderLat] = useState<number | null>(null)
+  const [leaderLng, setLeaderLng] = useState<number | null>(null)
 
   useEffect(() => {
     fetchMembers()
@@ -43,10 +51,51 @@ export default function TeamMembersPage() {
   const fetchMembers = async () => {
     try {
       setLoading(true)
-      const data = await teamService.getMembers()
-      setMembers(data)
-    } catch (error) {
-      console.error('Failed to fetch members:', error)
+      setNoTeam(false)
+      const data = await teamService.getMyTeamMembers()
+      if (!data) {
+        setNoTeam(true)
+        return
+      }
+
+      const leader = data.members.find(m => m.is_team_leader)
+      if (leader?.lat && leader?.lng) {
+        setLeaderLat(leader.lat)
+        setLeaderLng(leader.lng)
+      }
+
+      const processed = data.members.map(member => {
+        let distance = 0
+        if (leaderLat && leaderLng && member.lat && member.lng) {
+          distance = haversineDistance(leaderLat, leaderLng, member.lat, member.lng)
+        }
+        return {
+          id: member.id,
+          name: member.name,
+          first_name: member.first_name,
+          email: member.email,
+          role: member.role,
+          status: member.status,
+          lat: member.lat ?? undefined,
+          lng: member.lng ?? undefined,
+          distanceFromLeader: distance || undefined,
+          location: member.lat && member.lng ? `${member.lat.toFixed(5)}, ${member.lng.toFixed(5)}` : 'Unknown',
+          lastSeen: member.last_seen ? new Date(member.last_seen).toLocaleString() : 'Never',
+          tasksCompleted: 0,
+          formsSubmitted: 0,
+          accuracy: member.accuracy,
+          locationUpdatedAt: member.location_updated_at,
+        }
+      })
+
+      setMembers(processed)
+    } catch (error: any) {
+      const isNoTeam = error?.status === 404 || error?.message?.includes('No team assigned')
+      if (isNoTeam) {
+        setNoTeam(true)
+      } else {
+        console.error('Failed to fetch members:', error)
+      }
     } finally {
       setLoading(false)
     }
@@ -71,10 +120,38 @@ export default function TeamMembersPage() {
   }
 
   function handleMessage(member: TeamMember) {
-    // Navigate to notifications page (in-app messaging hub)
     setOpen(false)
     router.push('/teamleader/notifications')
   }
+
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (noTeam) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users2 className="h-5 w-5 text-orange-500" />
+              No Team Assigned
+            </CardTitle>
+            <CardDescription>You have not been assigned to a team yet.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Please contact your supervisor to be assigned to a team.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const activeCount = members.filter(m => m.status === 'online' || m.status === 'active').length
 
   return (
     <div className="p-6 space-y-6">
@@ -89,7 +166,7 @@ export default function TeamMembersPage() {
             {members.length} Total
           </Badge>
           <Badge className="flex items-center gap-1">
-            {members.filter(m => m.status === 'online' || m.status === 'active').length} Active
+            {activeCount} Active
           </Badge>
         </div>
       </div>
@@ -114,11 +191,8 @@ export default function TeamMembersPage() {
                     {member.name}
                   </CardTitle>
                   <div className="flex items-center gap-2 mt-1">
-                    <div
-                      className={cn('flex h-2 w-2 rounded-full', member.status !== 'offline' && 'animate-pulse')}
-                      style={{ backgroundColor: '' }}
-                    >
-                      <div className={cn('h-2 w-2 rounded-full', statusConfig[member.status])} />
+                    <div className="h-2 w-2 rounded-full">
+                      <div className={cn('h-2 w-2 rounded-full', statusConfig[member.status], member.status !== 'offline' && 'animate-pulse')} />
                     </div>
                     <CardDescription className="text-sm capitalize">{member.status}</CardDescription>
                     {member.sessionActive && <Badge variant="secondary" className="text-xs">Live</Badge>}
@@ -128,23 +202,18 @@ export default function TeamMembersPage() {
             </CardHeader>
             <CardContent className="pt-0 space-y-2 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
-                <Activity className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{member.currentActivity}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
                 <MapPin className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate">{member.location}</span>
               </div>
               {member.distanceFromLeader && (
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="text-xs">📏 {member.distanceFromLeader}km from leader</span>
+                  <span className="text-xs">📏 {formatDistance(member.distanceFromLeader)} from leader</span>
                 </div>
               )}
               <div className="text-xs text-muted-foreground/70 mt-2 pt-2 border-t">
                 Last seen {member.lastSeen}
               </div>
 
-              {/* Quick action buttons on the card */}
               <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
                 <Button
                   variant="outline"
@@ -170,7 +239,6 @@ export default function TeamMembersPage() {
         ))}
       </div>
 
-      {/* Member Detail Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
@@ -213,8 +281,11 @@ export default function TeamMembersPage() {
                     </div>
                     {selectedMember.distanceFromLeader && (
                       <div className="flex items-center gap-2 text-sm">
-                        📏 {selectedMember.distanceFromLeader}km from leader
+                        📏 {formatDistance(selectedMember.distanceFromLeader)} from leader
                       </div>
+                    )}
+                    {selectedMember.accuracy && (
+                      <div className="text-xs text-muted-foreground">Accuracy: ±{Math.round(selectedMember.accuracy)}m</div>
                     )}
                   </CardContent>
                 </Card>
@@ -264,11 +335,9 @@ export default function TeamMembersPage() {
                       Send Message
                     </Button>
                   </div>
-                  {(selectedMember as any).phone && (
-                    <p className="text-xs text-muted-foreground mt-2 text-center">
-                      {(selectedMember as any).phone} · {selectedMember.email}
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    {selectedMember.email}
+                  </p>
                 </CardContent>
               </Card>
             </div>

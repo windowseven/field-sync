@@ -24,7 +24,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
+import { zoneService } from '@/lib/api/zoneService'
+import { projectService, ApiProject } from '@/lib/api/projectService'
 
 interface Zone {
   id: string
@@ -41,21 +44,6 @@ interface Zone {
   overlap: boolean
 }
 
-const zones: Zone[] = [
-  { id: '1', name: 'Zone A', description: 'Central Business District', color: 'bg-chart-1', colorHex: '#22c55e', team: 'Team Alpha', status: 'active', coverage: 79, area: '4.2 km²', members: 9, visible: true, overlap: false },
-  { id: '2', name: 'Zone B', description: 'Nairobi West', color: 'bg-chart-2', colorHex: '#3b82f6', team: 'Unassigned', status: 'pending', coverage: 0, area: '6.1 km²', members: 0, visible: true, overlap: false },
-  { id: '3', name: 'Zone C', description: 'Westlands', color: 'bg-chart-3', colorHex: '#f59e0b', team: 'Team Beta', status: 'active', coverage: 68, area: '3.8 km²', members: 8, visible: true, overlap: true },
-  { id: '4', name: 'Zone D', description: "Lang'ata", color: 'bg-chart-4', colorHex: '#a855f7', team: 'Unassigned', status: 'pending', coverage: 0, area: '8.3 km²', members: 0, visible: false, overlap: false },
-  { id: '5', name: 'Zone E', description: 'Eastlands', color: 'bg-chart-5', colorHex: '#06b6d4', team: 'Team Gamma', status: 'active', coverage: 55, area: '5.5 km²', members: 7, visible: true, overlap: false },
-  { id: '6', name: 'Zone F', description: 'Kasarani', color: 'bg-chart-1', colorHex: '#22c55e', team: 'Team Delta', status: 'active', coverage: 50, area: '7.2 km²', members: 10, visible: true, overlap: false },
-  { id: '7', name: 'Zone G', description: 'Embakasi', color: 'bg-chart-2', colorHex: '#3b82f6', team: 'Unassigned', status: 'pending', coverage: 0, area: '9.0 km²', members: 0, visible: true, overlap: false },
-  { id: '8', name: 'Zone H', description: 'Kibera', color: 'bg-chart-3', colorHex: '#f59e0b', team: 'Team Echo', status: 'active', coverage: 64, area: '3.1 km²', members: 8, visible: true, overlap: false },
-  { id: '9', name: 'Zone I', description: 'Mathare', color: 'bg-chart-4', colorHex: '#a855f7', team: 'Unassigned', status: 'pending', coverage: 0, area: '2.8 km²', members: 0, visible: false, overlap: false },
-  { id: '10', name: 'Zone J', description: 'Ruaraka', color: 'bg-chart-5', colorHex: '#06b6d4', team: 'Unassigned', status: 'pending', coverage: 0, area: '4.6 km²', members: 0, visible: true, overlap: false },
-  { id: '11', name: 'Zone K', description: 'Makadara', color: 'bg-chart-1', colorHex: '#22c55e', team: 'Unassigned', status: 'pending', coverage: 0, area: '3.3 km²', members: 0, visible: true, overlap: false },
-  { id: '12', name: 'Zone L', description: 'Dagoretti', color: 'bg-chart-2', colorHex: '#3b82f6', team: 'Unassigned', status: 'pending', coverage: 0, area: '5.9 km²', members: 0, visible: true, overlap: false },
-]
-
 const statusConfig = {
   active: { label: 'Active', icon: CheckCircle2, className: 'bg-emerald-500/10 text-emerald-500' },
   completed: { label: 'Completed', icon: CheckCircle2, className: 'bg-primary/10 text-primary' },
@@ -63,8 +51,45 @@ const statusConfig = {
 }
 
 export default function SupervisorZonesPage() {
-  const [zonesState, setZonesState] = React.useState(zones)
+  const [zonesState, setZonesState] = React.useState<Zone[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
   const [createOpen, setCreateOpen] = React.useState(false)
+
+  const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
+
+  React.useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        setIsLoading(true)
+        const projects = await projectService.getAll()
+        const activeProject = projects.find((p: ApiProject) => p.status === 'active') || projects[0]
+
+        if (!activeProject) {
+          setZonesState([])
+          setError(null)
+          return
+        }
+
+        const projectZones = await zoneService.getByProject(activeProject.id)
+
+        const transformed = projectZones.map((zone: any, index: number) => ({
+          ...zoneService.transformForFrontend(zone),
+          color: chartColors[index % chartColors.length],
+        }))
+
+        setZonesState(transformed)
+        setError(null)
+      } catch (err) {
+        console.error('Failed to fetch zones:', err)
+        setError('Failed to load zones')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchZones()
+  }, [])
 
   function toggleVisible(id: string) {
     setZonesState(prev => prev.map(z => z.id === id ? { ...z, visible: !z.visible } : z))
@@ -140,96 +165,152 @@ export default function SupervisorZonesPage() {
 
           {/* Stats */}
           <div className="grid gap-4 sm:grid-cols-4">
-            {[
-              { label: 'Total Zones', value: zonesState.length, icon: Layers, color: 'text-primary', bg: 'bg-primary/10' },
-              { label: 'Assigned', value: assigned.length, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-              { label: 'Unassigned', value: pending.length, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-              { label: 'Overlapping', value: overlapping.length, icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10' },
-            ].map(s => (
-              <Card key={s.label}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg shrink-0', s.bg)}>
-                    <s.icon className={cn('h-5 w-5', s.color)} />
+            {isLoading ? (
+              <>
+                {[1, 2, 3, 4].map(i => (
+                  <Card key={i}>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg shrink-0 bg-muted animate-pulse" />
+                      <div className="space-y-2">
+                        <div className="h-6 w-12 bg-muted rounded animate-pulse" />
+                        <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </>
+            ) : (
+              <>
+                {error && (
+                  <div className="col-span-4 rounded-lg bg-destructive/10 p-4 text-destructive text-sm">
+                    {error}
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{s.value}</p>
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                )}
+                {[
+                  { label: 'Total Zones', value: zonesState.length, icon: Layers, color: 'text-primary', bg: 'bg-primary/10' },
+                  { label: 'Assigned', value: assigned.length, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                  { label: 'Unassigned', value: pending.length, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+                  { label: 'Overlapping', value: overlapping.length, icon: AlertTriangle, color: 'text-destructive', bg: 'bg-destructive/10' },
+                ].map(s => (
+                  <Card key={s.label}>
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg shrink-0', s.bg)}>
+                        <s.icon className={cn('h-5 w-5', s.color)} />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold">{s.value}</p>
+                        <p className="text-xs text-muted-foreground">{s.label}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </>
+            )}
           </div>
 
           {/* Zone Grid */}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {zonesState.map(zone => {
-              const cfg = statusConfig[zone.status]
-              const StatusIcon = cfg.icon
-              return (
-                <Card key={zone.id} className={cn('transition-opacity', !zone.visible && 'opacity-50')}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
+            {isLoading ? (
+              <>
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <Card key={i} className="animate-pulse">
+                    <CardHeader className="pb-3">
                       <div className="flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: zone.colorHex }} />
+                        <div className="h-3 w-3 rounded-full shrink-0 bg-muted" />
+                        <div className="space-y-2">
+                          <div className="h-4 w-20 bg-muted rounded" />
+                          <div className="h-3 w-32 bg-muted rounded" />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="h-4 w-full bg-muted rounded" />
+                      <div className="h-3 w-full bg-muted rounded" />
+                      <div className="h-8 bg-muted rounded" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </>
+            ) : error ? (
+              <div className="col-span-full rounded-lg bg-destructive/10 p-8 text-center text-destructive">
+                Failed to load zones. Please try again.
+              </div>
+            ) : zonesState.length === 0 ? (
+              <div className="col-span-full rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+                <MapPin className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                <p className="font-medium">No zones found</p>
+                <p className="text-sm">Create a zone to get started</p>
+              </div>
+            ) : (
+              zonesState.map(zone => {
+                const cfg = statusConfig[zone.status]
+                const StatusIcon = cfg.icon
+                return (
+                  <Card key={zone.id} className={cn('transition-opacity', !zone.visible && 'opacity-50')}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: zone.colorHex }} />
+                          <div>
+                            <CardTitle className="text-base">{zone.name}</CardTitle>
+                            <CardDescription className="text-xs">{zone.description}</CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {zone.overlap && (
+                            <Badge variant="secondary" className="bg-destructive/10 text-destructive text-[10px] px-1.5">
+                              Overlap
+                            </Badge>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem><Pencil className="mr-2 h-4 w-4" /> Edit Zone</DropdownMenuItem>
+                              <DropdownMenuItem><Users className="mr-2 h-4 w-4" /> Reassign Team</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Zone</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5" />
+                          {zone.team}
+                        </span>
+                        <Badge variant="secondary" className={cfg.className}>
+                          <StatusIcon className="h-3 w-3 mr-1" />
+                          {cfg.label}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>Area: <span className="text-foreground font-medium">{zone.area}</span></span>
+                        <span>Members: <span className="text-foreground font-medium">{zone.members}</span></span>
+                      </div>
+                      {zone.status !== 'pending' && (
                         <div>
-                          <CardTitle className="text-base">{zone.name}</CardTitle>
-                          <CardDescription className="text-xs">{zone.description}</CardDescription>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-muted-foreground">Coverage</span>
+                            <span className="font-medium">{zone.coverage}%</span>
+                          </div>
+                          <Progress value={zone.coverage} className="h-1.5" />
                         </div>
+                      )}
+                      <div className="flex items-center justify-between pt-1 border-t border-border">
+                        <span className="text-xs text-muted-foreground">Visible on map</span>
+                        <Switch checked={zone.visible} onCheckedChange={() => toggleVisible(zone.id)} />
                       </div>
-                      <div className="flex items-center gap-1">
-                        {zone.overlap && (
-                          <Badge variant="secondary" className="bg-destructive/10 text-destructive text-[10px] px-1.5">
-                            Overlap
-                          </Badge>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem><Pencil className="mr-2 h-4 w-4" /> Edit Zone</DropdownMenuItem>
-                            <DropdownMenuItem><Users className="mr-2 h-4 w-4" /> Reassign Team</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Zone</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Users className="h-3.5 w-3.5" />
-                        {zone.team}
-                      </span>
-                      <Badge variant="secondary" className={cfg.className}>
-                        <StatusIcon className="h-3 w-3 mr-1" />
-                        {cfg.label}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>Area: <span className="text-foreground font-medium">{zone.area}</span></span>
-                      <span>Members: <span className="text-foreground font-medium">{zone.members}</span></span>
-                    </div>
-                    {zone.status !== 'pending' && (
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">Coverage</span>
-                          <span className="font-medium">{zone.coverage}%</span>
-                        </div>
-                        <Progress value={zone.coverage} className="h-1.5" />
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between pt-1 border-t border-border">
-                      <span className="text-xs text-muted-foreground">Visible on map</span>
-                      <Switch checked={zone.visible} onCheckedChange={() => toggleVisible(zone.id)} />
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
           </div>
 
         </div>

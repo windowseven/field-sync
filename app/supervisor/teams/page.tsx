@@ -4,7 +4,7 @@ import * as React from 'react'
 import {
   Plus, Search, MoreHorizontal, Users, MapPin,
   TrendingUp, UserPlus, Trash2, Settings, UserMinus,
-  UsersRound, CheckCircle2,
+  UsersRound, CheckCircle2, Loader2,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,65 +26,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-
-const teams = [
-  {
-    id: '1', name: 'Team Alpha', color: 'bg-chart-1', zone: 'Zone A - Downtown',
-    status: 'active' as const, progress: 79,
-    leader: { name: 'Sarah Johnson', email: 'sarah.j@survey.co' },
-    members: [
-      { name: 'Kwame Asante', status: 'active' as const, submissions: 43 },
-      { name: 'Tewodros Bekele', status: 'active' as const, submissions: 19 },
-      { name: 'Lena Mugo', status: 'idle' as const, submissions: 12 },
-      { name: 'Ibrahim Diallo', status: 'offline' as const, submissions: 8 },
-    ],
-    tasksCompleted: 45, tasksPending: 12,
-  },
-  {
-    id: '2', name: 'Team Beta', color: 'bg-chart-2', zone: 'Zone C - Westlands',
-    status: 'active' as const, progress: 68,
-    leader: { name: 'James Kariuki', email: 'james.k@survey.co' },
-    members: [
-      { name: 'Fatima Ndiaye', status: 'offline' as const, submissions: 31 },
-      { name: 'Amina Sesay', status: 'active' as const, submissions: 27 },
-      { name: 'Osei Mensah', status: 'active' as const, submissions: 14 },
-    ],
-    tasksCompleted: 38, tasksPending: 18,
-  },
-  {
-    id: '3', name: 'Team Gamma', color: 'bg-chart-3', zone: 'Zone E - Eastlands',
-    status: 'active' as const, progress: 55,
-    leader: { name: 'Amara Diallo', email: 'amara.d@survey.co' },
-    members: [
-      { name: 'Ngozi Adeyemi', status: 'offline' as const, submissions: 4 },
-      { name: 'Sule Bah', status: 'idle' as const, submissions: 18 },
-      { name: 'Yvonne Cherono', status: 'active' as const, submissions: 22 },
-    ],
-    tasksCompleted: 29, tasksPending: 14,
-  },
-  {
-    id: '4', name: 'Team Delta', color: 'bg-chart-4', zone: 'Zone F - Kasarani',
-    status: 'idle' as const, progress: 50,
-    leader: { name: 'Chioma Obi', email: 'chioma.o@survey.co' },
-    members: [
-      { name: 'Victor Eze', status: 'idle' as const, submissions: 11 },
-      { name: 'Blessing Okeke', status: 'active' as const, submissions: 9 },
-      { name: 'Halima Juma', status: 'offline' as const, submissions: 2 },
-    ],
-    tasksCompleted: 22, tasksPending: 22,
-  },
-  {
-    id: '5', name: 'Team Echo', color: 'bg-chart-5', zone: 'Zone H - Kibera',
-    status: 'active' as const, progress: 64,
-    leader: { name: 'Mwangi Njoroge', email: 'mwangi.n@survey.co' },
-    members: [
-      { name: 'Aisha Diop', status: 'idle' as const, submissions: 15 },
-      { name: 'Kojo Acheampong', status: 'active' as const, submissions: 28 },
-      { name: 'Seun Adeyemi', status: 'active' as const, submissions: 18 },
-    ],
-    tasksCompleted: 18, tasksPending: 10,
-  },
-]
+import { teamService } from '@/lib/api/teamService'
+import { projectService, ApiProject } from '@/lib/api/projectService'
 
 const statusColors = {
   active: { dot: 'bg-emerald-500', label: 'Active', badge: 'bg-emerald-500/10 text-emerald-500' },
@@ -98,14 +41,111 @@ const memberStatus = {
   offline: 'bg-muted-foreground',
 }
 
+interface TeamData {
+  id: string
+  name: string
+  color: string
+  zone: string
+  status: 'active' | 'idle' | 'paused'
+  progress: number
+  leader: { name: string; email: string }
+  members: Array<{ name: string; status: 'active' | 'idle' | 'offline'; submissions: number }>
+  tasksCompleted: number
+  tasksPending: number
+}
+
 export default function SupervisorTeamsPage() {
   const [search, setSearch] = React.useState('')
   const [createOpen, setCreateOpen] = React.useState(false)
+  const [teams, setTeams] = React.useState<TeamData[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
+
+  React.useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        setIsLoading(true)
+        const projects = await projectService.getAll()
+        const activeProject = projects.find((p: ApiProject) => p.status === 'active') || projects[0]
+        
+        if (!activeProject) {
+          setTeams([])
+          setError(null)
+          return
+        }
+
+        const projectTeams = await teamService.getByProject(activeProject.id)
+        
+        const transformed = projectTeams.map((team: any, index: number) => ({
+          id: team.id,
+          name: team.name,
+          color: chartColors[index % chartColors.length],
+          zone: team.zone?.name || 'Unassigned',
+          status: team.status === 'active' ? 'active' : team.status === 'paused' ? 'paused' : 'idle',
+          progress: Math.round((team.tasks_completed || 0) / ((team.tasks_completed || 0) + (team.tasks_pending || 1)) * 100),
+          leader: { name: team.leader?.name || 'Unassigned', email: team.leader?.email || '' },
+          members: (team.members || []).map((m: any) => ({
+            name: m.name,
+            status: m.status === 'active' ? 'active' : m.status === 'offline' ? 'offline' : 'idle',
+            submissions: m.submissions || 0,
+          })),
+          tasksCompleted: team.tasks_completed || 0,
+          tasksPending: team.tasks_pending || 0,
+        }))
+
+        setTeams(transformed as TeamData[])
+        setError(null)
+      } catch (err) {
+        console.error('Failed to fetch teams:', err)
+        setError('Failed to load teams')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchTeams()
+  }, [])
 
   const filtered = teams.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     t.leader.name.toLowerCase().includes(search.toLowerCase())
   )
+
+  if (isLoading) {
+    return (
+      <>
+        <DashboardHeader
+          title="Teams"
+          rootCrumb={{ label: 'Supervisor', href: '/supervisor' }}
+          breadcrumbs={[{ label: 'Project Overview', href: '/supervisor' }, { label: 'Teams' }]}
+        />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+        <DashboardHeader
+          title="Teams"
+          rootCrumb={{ label: 'Supervisor', href: '/supervisor' }}
+          breadcrumbs={[{ label: 'Project Overview', href: '/supervisor' }, { label: 'Teams' }]}
+        />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="flex h-40 items-center justify-center">
+            <p className="text-destructive">{error}</p>
+          </div>
+        </main>
+      </>
+    )
+  }
 
   return (
     <>
@@ -173,7 +213,7 @@ export default function SupervisorTeamsPage() {
               { label: 'Total Teams', value: teams.length, icon: UsersRound, color: 'text-primary', bg: 'bg-primary/10' },
               { label: 'Active Teams', value: teams.filter(t => t.status === 'active').length, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
               { label: 'Total Members', value: teams.reduce((acc, t) => acc + t.members.length + 1, 0), icon: Users, color: 'text-chart-2', bg: 'bg-chart-2/10' },
-              { label: 'Avg. Progress', value: `${Math.round(teams.reduce((acc, t) => acc + t.progress, 0) / teams.length)}%`, icon: TrendingUp, color: 'text-chart-3', bg: 'bg-chart-3/10' },
+              { label: 'Avg. Progress', value: teams.length > 0 ? `${Math.round(teams.reduce((acc, t) => acc + t.progress, 0) / teams.length)}%` : '0%', icon: TrendingUp, color: 'text-chart-3', bg: 'bg-chart-3/10' },
             ].map(s => (
               <Card key={s.label}>
                 <CardContent className="p-4 flex items-center gap-3">
@@ -195,98 +235,106 @@ export default function SupervisorTeamsPage() {
             <Input placeholder="Search teams..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
 
-          {/* Team Cards */}
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map(team => (
-              <Card key={team.id} className="flex flex-col">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={cn('h-3 w-3 rounded-full shrink-0', team.color)} />
+          {teams.length === 0 ? (
+            <Card className="flex flex-col items-center justify-center py-12">
+              <CardContent className="text-center">
+                <UsersRound className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Teams Yet</h3>
+                <p className="text-muted-foreground mb-4">Create your first team to start managing field workers.</p>
+                <Button onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" /> Create Team
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {filtered.map(team => (
+                <Card key={team.id} className="flex flex-col">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={cn('h-3 w-3 rounded-full shrink-0', team.color)} />
+                        <div>
+                          <CardTitle className="text-base">{team.name}</CardTitle>
+                          <CardDescription className="flex items-center gap-1 mt-0.5">
+                            <MapPin className="h-3 w-3" /> {team.zone}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className={statusColors[team.status].badge}>
+                          <span className={cn('h-1.5 w-1.5 rounded-full mr-1', statusColors[team.status].dot)} />
+                          {statusColors[team.status].label}
+                        </Badge>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem><Settings className="mr-2 h-4 w-4" /> Edit Team</DropdownMenuItem>
+                            <DropdownMenuItem><UserPlus className="mr-2 h-4 w-4" /> Add Member</DropdownMenuItem>
+                            <DropdownMenuItem><MapPin className="mr-2 h-4 w-4" /> Change Zone</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Disband Team</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-1 space-y-4">
+                    <div className="flex items-center gap-2 rounded-md bg-primary/5 border border-primary/10 px-3 py-2">
+                      <Avatar className="h-7 w-7">
+                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                          {team.leader.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
-                        <CardTitle className="text-base">{team.name}</CardTitle>
-                        <CardDescription className="flex items-center gap-1 mt-0.5">
-                          <MapPin className="h-3 w-3" /> {team.zone}
-                        </CardDescription>
+                        <p className="text-xs font-medium">{team.leader.name}</p>
+                        <p className="text-[10px] text-muted-foreground">Team Leader</p>
                       </div>
+                      <Badge variant="outline" className="ml-auto text-[10px]">Leader</Badge>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className={statusColors[team.status].badge}>
-                        <span className={cn('h-1.5 w-1.5 rounded-full mr-1', statusColors[team.status].dot)} />
-                        {statusColors[team.status].label}
-                      </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem><Settings className="mr-2 h-4 w-4" /> Edit Team</DropdownMenuItem>
-                          <DropdownMenuItem><UserPlus className="mr-2 h-4 w-4" /> Add Member</DropdownMenuItem>
-                          <DropdownMenuItem><MapPin className="mr-2 h-4 w-4" /> Change Zone</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Disband Team</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Members ({team.members.length})</p>
+                      {team.members.map(member => (
+                        <div key={member.name} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', memberStatus[member.status])} />
+                            <span>{member.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{member.submissions} submissions</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem><UserMinus className="mr-2 h-3.5 w-3.5" /> Remove from Team</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 space-y-4">
-                  {/* Leader */}
-                  <div className="flex items-center gap-2 rounded-md bg-primary/5 border border-primary/10 px-3 py-2">
-                    <Avatar className="h-7 w-7">
-                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                        {team.leader.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
+
                     <div>
-                      <p className="text-xs font-medium">{team.leader.name}</p>
-                      <p className="text-[10px] text-muted-foreground">Team Leader</p>
-                    </div>
-                    <Badge variant="outline" className="ml-auto text-[10px]">Leader</Badge>
-                  </div>
-
-                  {/* Members */}
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Members ({team.members.length})</p>
-                    {team.members.map(member => (
-                      <div key={member.name} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', memberStatus[member.status])} />
-                          <span>{member.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{member.submissions} submissions</span>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <MoreHorizontal className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem><UserMinus className="mr-2 h-3.5 w-3.5" /> Remove from Team</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-muted-foreground">Task Progress</span>
+                        <span className="text-xs font-medium">{team.tasksCompleted}/{team.tasksCompleted + team.tasksPending}</span>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Progress */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">Task Progress</span>
-                      <span className="text-xs font-medium">{team.tasksCompleted}/{team.tasksCompleted + team.tasksPending}</span>
+                      <Progress value={team.progress} className="h-2" />
+                      <p className="text-xs text-muted-foreground mt-1">{team.progress}% complete</p>
                     </div>
-                    <Progress value={team.progress} className="h-2" />
-                    <p className="text-xs text-muted-foreground mt-1">{team.progress}% complete</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </main>
     </>

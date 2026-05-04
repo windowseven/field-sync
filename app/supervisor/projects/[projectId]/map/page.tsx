@@ -3,9 +3,7 @@
 import * as React from 'react'
 import { useParams } from 'next/navigation'
 import {
-  Users, MapPin, Radio, Layers, Navigation, ZoomIn, ZoomOut,
-  Maximize2, Eye, EyeOff, RefreshCw, ChevronRight, Circle,
-  Filter, Clock, CheckCircle2
+  Users, MapPin, Radio, Layers, RefreshCw, Filter, Clock, Loader2,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,28 +18,12 @@ import { http } from '@/lib/api/httpClient'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { zoneService } from '@/lib/api/zoneService'
+import { BaseMap, MapUser, MapZone } from '@/components/shared/map'
+import { zoneService, ApiZone } from '@/lib/api/zoneService'
 import { teamService } from '@/lib/api/teamService'
 
-type LiveAgentStatus = 'active' | 'idle' | 'offline'
-
-type LiveAgent = {
-  id: string
-  name: string
-  team: string
-  zone: string
-  status: LiveAgentStatus
-  lastUpdate: string
-  lat: number
-  lng: number
-  submissions: number
-}
-
-const teamColors: Record<string, string> = {
-  admin: '#22c55e',
-  supervisor: '#3b82f6',
-  team_leader: '#f59e0b',
-  field_agent: '#a855f7',
+const zoneColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
+const teamColorMap: Record<string, string> = {
   'Team Alpha': '#22c55e',
   'Team Beta': '#3b82f6',
   'Team Gamma': '#f59e0b',
@@ -51,68 +33,22 @@ const teamColors: Record<string, string> = {
 
 const statusDot = { active: 'bg-emerald-500 animate-pulse', idle: 'bg-amber-500', offline: 'bg-muted-foreground' }
 
-// Mock SVG map with agent dots
-function MockMap({ agents, zonesVisible, zones }: { agents: LiveAgent[]; zonesVisible: boolean; zones: any[] }) {
-  return (
-    <div className="relative w-full h-full bg-[hsl(var(--muted))] rounded-lg overflow-hidden border border-border">
-      {/* Grid overlay */}
-      <svg className="absolute inset-0 w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(var(--foreground))" strokeWidth="0.5" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
-      </svg>
-
-      {/* Zone blobs */}
-      {zonesVisible && zones.length > 0 && (
-        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          {zones.map((z, i) => {
-            const cx = (20 + (i * 15)) % 90 + '%'
-            const cy = (30 + (i * 12)) % 80 + '%'
-            return (
-              <ellipse key={z.id} cx={cx} cy={cy} rx="10%" ry="8%" fill="#22c55e" fillOpacity="0.1" stroke="#22c55e" strokeOpacity="0.3" strokeWidth="1" strokeDasharray="4 2" />
-            )
-          })}
-        </svg>
-      )}
-
-      {/* Agent dots */}
-      {agents.map((agent, i) => {
-        const x = (30 + (i * 8)) % 90 + '%'
-        const y = (40 + (i * 6)) % 80 + '%'
-        const color = teamColors[agent.team] || '#888'
-        return (
-          <div
-            key={agent.id}
-            className="absolute flex items-center justify-center transition-all duration-500"
-            style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
-            title={`${agent.name} · ${agent.team}`}
-          >
-            <div
-              className={cn('h-4 w-4 rounded-full border-2 border-white shadow-md cursor-pointer', agent.status === 'active' && 'animate-pulse')}
-              style={{ backgroundColor: color }}
-            />
-          </div>
-        )
-      })}
-
-      {/* Map labels */}
-      <div className="absolute bottom-3 left-3 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
-        Field Operations Map
-      </div>
-      <div className="absolute top-3 right-3 text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded flex items-center gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Live Feed
-      </div>
-    </div>
-  )
+type Agent = {
+  id: string
+  name: string
+  team: string
+  zone: string
+  status: 'active' | 'idle' | 'offline'
+  lastUpdate: string
+  lat: number
+  lng: number
 }
 
 export default function SupervisorMapPage() {
   const { projectId } = useParams() as { projectId: string }
-  const [liveAgents, setLiveAgents] = React.useState<LiveAgent[]>([])
+  const [agents, setAgents] = React.useState<Agent[]>([])
+  const [mapUsers, setMapUsers] = React.useState<MapUser[]>([])
+  const [mapZones, setMapZones] = React.useState<MapZone[]>([])
   const [zonesData, setZonesData] = React.useState<any[]>([])
   const [projectTeams, setProjectTeams] = React.useState<any[]>([])
   const [zonesVisible, setZonesVisible] = React.useState(true)
@@ -131,8 +67,7 @@ export default function SupervisorMapPage() {
     if (min < 60) return `${min}m ago`
     const hr = Math.floor(min / 60)
     if (hr < 24) return `${hr}h ago`
-    const day = Math.floor(hr / 24)
-    return `${day}d ago`
+    return `${Math.floor(hr / 24)}d ago`
   }, [])
 
   const fetchData = React.useCallback(async () => {
@@ -144,9 +79,9 @@ export default function SupervisorMapPage() {
         zoneService.getByProject(projectId),
         teamService.getByProject(projectId)
       ])
-      
+
       const rows = agentsRes?.data?.locations ?? []
-      const mapped: LiveAgent[] = rows.map((r: any) => ({
+      const mapped: Agent[] = rows.map((r: any) => ({
         id: r.user_id,
         name: r.name ?? r.email ?? r.user_id,
         team: r.team_name || r.role || 'field_agent',
@@ -155,9 +90,41 @@ export default function SupervisorMapPage() {
         lastUpdate: timeAgo(r.updated_at),
         lat: Number(r.lat ?? 0),
         lng: Number(r.lng ?? 0),
-        submissions: 0,
       }))
-      setLiveAgents(mapped)
+      setAgents(mapped)
+
+      const seen = new Set<string>()
+      const users: MapUser[] = []
+      for (const r of rows) {
+        if (seen.has(r.user_id)) continue
+        seen.add(r.user_id)
+        users.push({
+          user_id: r.user_id,
+          name: r.name ?? r.email,
+          role: r.role,
+          status: r.status,
+          lat: Number(r.lat ?? 0),
+          lng: Number(r.lng ?? 0),
+          accuracy: r.accuracy,
+          updated_at: r.updated_at,
+        })
+      }
+      setMapUsers(users)
+
+      const transformedZones: MapZone[] = zonesRes.map((zone: ApiZone, i: number) => {
+        const boundaries = zone.boundaries
+          ? (typeof zone.boundaries === 'string' ? JSON.parse(zone.boundaries) : zone.boundaries) as [number, number][]
+          : undefined
+        return {
+          id: zone.id,
+          name: zone.name,
+          description: zone.description || '',
+          color: zoneColors[i % zoneColors.length],
+          boundaries,
+        }
+      })
+      setMapZones(transformedZones)
+
       setZonesData(zonesRes)
       setProjectTeams(teamsRes)
     } catch (err) {
@@ -171,8 +138,9 @@ export default function SupervisorMapPage() {
     fetchData()
   }, [fetchData])
 
-  const filteredAgents = teamFilter === 'all' ? liveAgents : liveAgents.filter(a => a.team === teamFilter)
-  const activeCount = liveAgents.filter(a => a.status === 'active').length
+  const filteredAgents = teamFilter === 'all' ? agents : agents.filter(a => a.team === teamFilter)
+  const filteredUsers = teamFilter === 'all' ? mapUsers : mapUsers.filter(u => u.team === teamFilter || u.role === teamFilter)
+  const activeCount = agents.filter(a => a.status === 'active').length
 
   return (
     <>
@@ -193,7 +161,7 @@ export default function SupervisorMapPage() {
                   Live Operational Feed
                 </Badge>
               </div>
-              <p className="text-muted-foreground text-sm">Real-time tracking of mission assets and coverage zones</p>
+              <p className="text-muted-foreground text-sm">Real-time tracking of field agents and coverage zones</p>
             </div>
             <Button
               variant="outline"
@@ -217,7 +185,7 @@ export default function SupervisorMapPage() {
             </div>
             <div className="flex items-center gap-2 text-amber-500">
               <span className="h-2 w-2 rounded-full bg-amber-500" />
-              <span>{liveAgents.filter(a => a.status === 'idle').length} idle</span>
+              <span>{agents.filter(a => a.status === 'idle').length} idle</span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <Radio className="h-3.5 w-3.5" />
@@ -242,24 +210,35 @@ export default function SupervisorMapPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Switch id="zones" checked={zonesVisible} onCheckedChange={setZonesVisible} />
-                    <Label htmlFor="zones" className="text-xs cursor-pointer">Zone Overlay</Label>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Switch id="zones" checked={zonesVisible} onCheckedChange={setZonesVisible} />
+                  <Label htmlFor="zones" className="text-xs cursor-pointer flex items-center gap-1">
+                    <Layers className="h-3.5 w-3.5" /> Zone Overlay
+                  </Label>
                 </div>
               </div>
 
               {/* Map Canvas */}
-              <div className="h-[500px]">
-                <MockMap agents={filteredAgents} zonesVisible={zonesVisible} zones={zonesData} />
+              <div className="h-[500px] rounded-lg overflow-hidden border border-border">
+                {isLoading ? (
+                  <div className="h-full flex items-center justify-center bg-muted/30">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <BaseMap
+                    users={filteredUsers}
+                    zones={zonesVisible ? mapZones : []}
+                    showLabels={true}
+                    showCoverage={false}
+                  />
+                )}
               </div>
 
               {/* Zone Legend */}
               <Card>
                 <CardContent className="p-3">
                   <div className="flex flex-wrap gap-4">
-                    {zonesData.length > 0 ? zonesData.map(z => (
+                    {zonesData.length > 0 ? zonesData.map((z, i) => (
                       <div key={z.id} className="flex items-center gap-1.5">
                         <div className="h-2.5 w-5 rounded-sm border" style={{ backgroundColor: '#22c55e20', borderColor: '#22c55e' }} />
                         <span className="text-xs text-muted-foreground">{z.name}</span>
@@ -285,7 +264,7 @@ export default function SupervisorMapPage() {
                     <div className="p-3 space-y-2">
                       {isLoading ? (
                         <div className="py-20 text-center">
-                          <Clock className="h-8 w-8 animate-spin text-primary opacity-20 mx-auto mb-2" />
+                          <Loader2 className="h-8 w-8 animate-spin text-primary opacity-20 mx-auto mb-2" />
                           <p className="text-[10px] text-muted-foreground">Syncing positions...</p>
                         </div>
                       ) : filteredAgents.length === 0 ? (
@@ -303,7 +282,7 @@ export default function SupervisorMapPage() {
                         >
                           <div className="relative shrink-0">
                             <Avatar className="h-8 w-8">
-                              <AvatarFallback className="text-[10px] font-bold" style={{ backgroundColor: (teamColors[agent.team] || '#888') + '20', color: teamColors[agent.team] || '#888' }}>
+                              <AvatarFallback className="text-[10px] font-bold" style={{ backgroundColor: (teamColorMap[agent.team] || '#888') + '20', color: teamColorMap[agent.team] || '#888' }}>
                                 {agent.name.split(' ').map(n => n[0]).join('')}
                               </AvatarFallback>
                             </Avatar>

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { http } from '@/lib/api/httpClient'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -64,106 +65,34 @@ interface TrackedUser {
   path?: { lat: number; lng: number }[]
 }
 
-const trackedUsers: TrackedUser[] = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    team: 'Alpha',
-    teamColor: 'bg-chart-1',
-    zone: 'Zone A',
-    status: 'active',
-    activity: 'Filling census form',
-    lastUpdate: '10s ago',
-    distance: 2.4,
-    location: { lat: 40.7128, lng: -74.006 },
-  },
-  {
-    id: '2',
-    name: 'Mike Chen',
-    team: 'Alpha',
-    teamColor: 'bg-chart-1',
-    zone: 'Zone A',
-    status: 'moving',
-    activity: 'En route to next location',
-    lastUpdate: '5s ago',
-    speed: 4.2,
-    distance: 1.8,
-    location: { lat: 40.7138, lng: -74.008 },
-  },
-  {
-    id: '3',
-    name: 'James Miller',
-    team: 'Beta',
-    teamColor: 'bg-chart-2',
-    zone: 'Zone B',
-    status: 'active',
-    activity: 'Survey in progress',
-    lastUpdate: '30s ago',
-    distance: 3.1,
-    location: { lat: 40.7148, lng: -74.01 },
-  },
-  {
-    id: '4',
-    name: 'Lisa Park',
-    team: 'Alpha',
-    teamColor: 'bg-chart-1',
-    zone: 'Zone A',
-    status: 'idle',
-    activity: 'Stationary for 5 minutes',
-    lastUpdate: '2m ago',
-    distance: 0.9,
-    location: { lat: 40.7118, lng: -74.004 },
-  },
-  {
-    id: '5',
-    name: 'Alex Turner',
-    team: 'Gamma',
-    teamColor: 'bg-chart-3',
-    zone: 'Zone C',
-    status: 'moving',
-    activity: 'Traveling to assigned area',
-    lastUpdate: '8s ago',
-    speed: 5.8,
-    distance: 4.2,
-    location: { lat: 40.7158, lng: -74.012 },
-  },
-  {
-    id: '6',
-    name: 'Emma Davis',
-    team: 'Beta',
-    teamColor: 'bg-chart-2',
-    zone: 'Zone B',
-    status: 'active',
-    activity: 'Completing survey',
-    lastUpdate: '15s ago',
-    distance: 2.7,
-    location: { lat: 40.7168, lng: -74.014 },
-  },
-  {
-    id: '7',
-    name: 'David Kim',
-    team: 'Gamma',
-    teamColor: 'bg-chart-3',
-    zone: 'Zone C',
-    status: 'offline',
-    activity: 'Connection lost',
-    lastUpdate: '5m ago',
-    distance: 1.5,
-    location: { lat: 40.7188, lng: -74.018 },
-  },
-  {
-    id: '8',
-    name: 'Nina Patel',
-    team: 'Delta',
-    teamColor: 'bg-chart-4',
-    zone: 'Zone D',
-    status: 'active',
-    activity: 'Door-to-door outreach',
-    lastUpdate: '20s ago',
-    distance: 5.1,
-    location: { lat: 40.7198, lng: -74.02 },
-  },
-]
+type LocationsResponse = {
+  status: string
+  data?: {
+    locations?: Array<{
+      user_id: string
+      name?: string
+      email?: string
+      role?: string
+      status?: string
+      updated_at?: string
+      lat?: number | string
+      lng?: number | string
+    }>
+  }
+}
+
+const teamColorsMap: Record<string, string> = {
+  admin: 'bg-chart-1',
+  supervisor: 'bg-chart-2',
+  team_leader: 'bg-chart-3',
+  field_agent: 'bg-chart-4',
+  'Team Alpha': 'bg-chart-1',
+  'Team Beta': 'bg-chart-2',
+  'Team Gamma': 'bg-chart-3',
+  'Team Delta': 'bg-chart-4',
+}
+
+const defaultUsers: TrackedUser[] = []
 
 const teamStats = [
   { team: 'Alpha', active: 3, idle: 1, offline: 0, color: 'bg-chart-1' },
@@ -205,10 +134,51 @@ function getStatusBadge(status: TrackedUser['status']) {
   }
 }
 
+function timeAgo(iso: string) {
+  const t = new Date(iso).getTime()
+  if (!Number.isFinite(t)) return '—'
+  const diff = Date.now() - t
+  const sec = Math.floor(diff / 1000)
+  if (sec < 60) return `${sec}s ago`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  return `${day}d ago`
+}
+
 export default function TrackingPage() {
+  const [trackedUsers, setTrackedUsers] = React.useState<TrackedUser[]>(defaultUsers)
   const [selectedTeam, setSelectedTeam] = React.useState('all')
   const [selectedUser, setSelectedUser] = React.useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = React.useState(false)
+
+  const fetchUsers = React.useCallback(async () => {
+    try {
+      const res = await http.get<LocationsResponse>('/locations')
+      if (res?.status !== 'success') return
+      const rows = res?.data?.locations ?? []
+      const mapped: TrackedUser[] = rows.map((r) => ({
+        id: r.user_id,
+        name: r.name ?? r.email ?? r.user_id,
+        team: r.role ?? 'field_agent',
+        teamColor: teamColorsMap[r.role ?? 'field_agent'] ?? 'bg-chart-1',
+        zone: '—',
+        status: r.status === 'online' ? 'active' : r.status === 'idle' ? 'idle' : 'offline',
+        activity: r.status === 'online' ? 'Active in field' : r.status === 'idle' ? 'Idle' : 'Offline',
+        lastUpdate: timeAgo(r.updated_at ?? new Date().toISOString()),
+        location: { lat: Number(r.lat ?? 0), lng: Number(r.lng ?? 0) },
+      }))
+      if (mapped.length > 0) setTrackedUsers(mapped)
+    } catch (err) {
+      console.error('Failed to fetch tracked users', err)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
 
   const filteredUsers =
     selectedTeam === 'all'
@@ -217,7 +187,7 @@ export default function TrackingPage() {
 
   const handleRefresh = () => {
     setIsRefreshing(true)
-    setTimeout(() => setIsRefreshing(false), 1000)
+    fetchUsers().finally(() => setTimeout(() => setIsRefreshing(false), 1000))
   }
 
   const activeCount = trackedUsers.filter((u) => u.status === 'active').length

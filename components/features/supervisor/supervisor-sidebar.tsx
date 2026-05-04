@@ -26,11 +26,14 @@ import { projectService } from '@/lib/api/projectService'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { BrandLogo } from '@/components/shared/branding/brand-logo'
 import { useTheme } from 'next-themes'
+import { useUnreadNotifications, useNotificationListener } from '@/hooks/use-notifications'
 
 export function SupervisorSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
+  const unreadNotifications = useUnreadNotifications()
+  useNotificationListener()
 
   // Helper function to get project by ID (mock fallback for now)
   const getProjectById = (id: string): { id: string; name: string; location: string } | null => {
@@ -55,7 +58,7 @@ export function SupervisorSidebar() {
   // Workspace Navigation Items
   const workspaceItems = [
     { title: 'My Projects', icon: FolderOpen, href: '/supervisor/projects' },
-    { title: 'Notifications', icon: Bell, href: '/supervisor/notifications' },
+    { title: 'Notifications', icon: Bell, href: '/supervisor/notifications', badge: unreadNotifications > 0 ? unreadNotifications : null },
     { title: 'Settings', icon: Settings, href: '/supervisor/settings' },
   ]
 
@@ -187,6 +190,11 @@ export function SupervisorSidebar() {
                       <Link href={item.href}>
                         <item.icon className={cn("h-4 w-4", isLinkActive(item.href) && "text-primary")} />
                         <span className="text-sm">{item.title}</span>
+                        {(item as any).badge && (
+                          <Badge variant="default" className="ml-auto h-5 px-1.5 text-[10px] group-data-[collapsible=icon]:hidden">
+                            {(item as any).badge}
+                          </Badge>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

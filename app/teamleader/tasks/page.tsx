@@ -33,40 +33,55 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [teamMembers, setTeamMembers] = useState<{ id: string; name: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [noTeam, setNoTeam] = useState(false)
+  const [projectId, setProjectId] = useState('')
+
+  const [newTitle, setNewTitle] = useState('')
+  const [newDesc, setNewDesc] = useState('')
+  const [newAssign, setNewAssign] = useState('')
+  const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('medium')
+  const [reassignId, setReassignId] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true)
-        const [tasksData, membersData] = await Promise.all([
-          taskService.getAll(),
-          teamService.getMembers()
-        ])
-        const transformedTasks: Task[] = (tasksData as ApiTask[]).map((task) => ({
-          id: task.id,
-          title: task.title,
-          description: task.description ?? '',
-          assignedTo: task.assigned_to ? [task.assigned_to] : [],
-          status: task.status,
-          priority: task.priority,
-          dueDate: task.deadline ?? task.created_at,
-          progress: task.status === 'completed' ? 100 : task.status === 'in-progress' ? 50 : 0,
-        }))
-        setTasks(transformedTasks)
-        setTeamMembers(membersData.map(m => ({ id: m.id, name: m.name })))
-      } catch (error) {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true)
+      setNoTeam(false)
+      const [tasksData, membersData] = await Promise.all([
+        taskService.getAll(),
+        teamService.getMembers()
+      ])
+      const transformedTasks: Task[] = (tasksData as ApiTask[]).map((task) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description ?? '',
+        assignedTo: task.assigned_to ? [task.assigned_to] : [],
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.deadline ?? task.created_at,
+        progress: task.status === 'completed' ? 100 : task.status === 'in-progress' ? 50 : 0,
+      }))
+      setTasks(transformedTasks)
+      setTeamMembers(membersData.map(m => ({ id: m.id, name: m.name })))
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        setNoTeam(true)
+      } else {
         console.error('Failed to load tasks/members:', error)
         toast({
           title: 'Error',
           description: 'Failed to load data. Please refresh.',
           variant: 'destructive'
         })
-      } finally {
-        setIsLoading(false)
       }
+    } finally {
+      setIsLoading(false)
     }
-    loadData()
-  }, [])
+  }
 
   const priorityConfig = {
     high: 'bg-destructive text-destructive-foreground',
@@ -89,14 +104,56 @@ export default function TasksPage() {
 
   function openNewTask() {
     setSelectedTaskId(null)
+    setNewTitle('')
+    setNewDesc('')
+    setNewAssign('')
+    setNewPriority('medium')
     setOpenTaskDialog(true)
+  }
+
+  async function handleCreateTask() {
+    if (!newTitle.trim()) return
+    setIsCreating(true)
+    try {
+      const [membersData] = await Promise.all([
+        teamService.getMembers()
+      ])
+      const team = membersData
+      const projectMembers = team.map(m => ({ id: m.id, name: m.name }))
+
+      const newTask = await taskService.create({
+        project_id: team[0]?.team_project_id || '00000000-0000-0000-0000-000000000000',
+        title: newTitle,
+        description: newDesc || undefined,
+        assigned_to: newAssign || undefined,
+        priority: newPriority,
+        status: 'pending',
+      })
+
+      const transformed: Task = {
+        id: newTask.id,
+        title: newTask.title,
+        description: newTask.description ?? '',
+        assignedTo: newTask.assigned_to ? [newTask.assigned_to] : [],
+        status: newTask.status,
+        priority: newTask.priority,
+        dueDate: newTask.deadline ?? newTask.created_at,
+        progress: 0,
+      }
+      setTasks(prev => [transformed, ...prev])
+      toast({ title: 'Success', description: 'Task created and assigned.' })
+      setOpenTaskDialog(false)
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.response?.data?.message || 'Failed to create task.', variant: 'destructive' })
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   async function markComplete() {
     if (!selectedTaskId) return
     try {
-      // Assuming taskService has an update method, if not I'll add one
-      // For now let's just update local state and toast
+      await taskService.update(selectedTaskId, { status: 'completed' })
       setTasks(prev =>
         prev.map(t => t.id === selectedTaskId ? { ...t, status: 'completed' as const, progress: 100 } : t)
       )
@@ -105,6 +162,46 @@ export default function TasksPage() {
       toast({ title: 'Error', description: 'Failed to update task.', variant: 'destructive' })
     }
     setOpenTaskDialog(false)
+  }
+
+  async function handleReassign() {
+    if (!selectedTaskId || !reassignId) return
+    try {
+      await taskService.update(selectedTaskId, { assigned_to: reassignId })
+      setTasks(prev =>
+        prev.map(t => t.id === selectedTaskId ? { ...t, assignedTo: [reassignId] } : t)
+      )
+      toast({ title: 'Success', description: 'Task reassigned.' })
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to reassign task.', variant: 'destructive' })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (noTeam) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-500" />
+              No Team Assigned
+            </CardTitle>
+            <CardDescription>You have not been assigned to a team yet.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Please contact your supervisor to be assigned to a team.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -279,7 +376,7 @@ export default function TasksPage() {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium mb-2 block">Reassign Member</label>
-                  <Select>
+                  <Select value={reassignId} onValueChange={setReassignId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select member" />
                     </SelectTrigger>
@@ -297,8 +394,8 @@ export default function TasksPage() {
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                     {selectedTask.status === 'completed' ? 'Completed ✓' : 'Mark Complete'}
                   </Button>
-                  <Button variant="outline" className="flex-1">
-                    Update Progress
+                  <Button variant="outline" className="flex-1" onClick={handleReassign} disabled={!reassignId}>
+                    Reassign
                   </Button>
                 </div>
               </div>
@@ -309,16 +406,26 @@ export default function TasksPage() {
               <div className="space-y-3">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Task Title</label>
-                  <input className="w-full px-3 py-2 rounded-md border bg-background text-sm" placeholder="Enter task title..." />
+                  <input
+                    className="w-full px-3 py-2 rounded-md border bg-background text-sm"
+                    placeholder="Enter task title..."
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Description</label>
-                  <textarea className="w-full px-3 py-2 rounded-md border bg-background text-sm min-h-[80px]" placeholder="Describe the task..." />
+                  <textarea
+                    className="w-full px-3 py-2 rounded-md border bg-background text-sm min-h-[80px]"
+                    placeholder="Describe the task..."
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium mb-1 block">Assign To</label>
-                    <Select>
+                    <Select value={newAssign} onValueChange={setNewAssign}>
                       <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
                       <SelectContent>
                         {teamMembers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
@@ -327,7 +434,7 @@ export default function TasksPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Priority</label>
-                    <Select>
+                    <Select value={newPriority} onValueChange={(v) => setNewPriority(v as any)}>
                       <SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="high">High</SelectItem>
@@ -339,7 +446,10 @@ export default function TasksPage() {
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
-                <Button className="flex-1">Create Task</Button>
+                <Button className="flex-1" onClick={handleCreateTask} disabled={isCreating || !newTitle.trim()}>
+                  {isCreating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                  Create Task
+                </Button>
                 <Button variant="outline" onClick={() => setOpenTaskDialog(false)}>Cancel</Button>
               </div>
             </div>

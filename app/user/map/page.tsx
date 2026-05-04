@@ -1,49 +1,190 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
-  MapPin, Navigation, Users, ZoomIn, ZoomOut,
-  Crosshair, AlertTriangle, CheckCircle2, Radio, Loader2
+  MapPin, Navigation, Users, AlertTriangle, Loader2, Wifi, WifiOff, Crosshair
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/api/swr-fetcher'
+import { BaseMap, MapUser, MapZone } from '@/components/shared/map'
+import { useGeolocation, useWsLocationBroadcast } from '@/hooks/use-geolocation'
+import { zoneService, ApiZone } from '@/lib/api/zoneService'
+import { projectService, ApiProject } from '@/lib/api/projectService'
 
-type TeamMember = {
-  id: string
+const zoneColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
+
+type ApiLocation = {
+  user_id: string
   name?: string
   email?: string
-  role?: string
+  role: string
   status?: string
+  lat: number
+  lng: number
+  accuracy?: number
+  updated_at?: string
 }
 
 export default function UserMapPage() {
   const { data: profileData, error: profileError } = useSWR('/auth/profile', fetcher)
   const { data: teamData, error: teamError } = useSWR('/team/members', fetcher)
-  
-  const [locationSharing, setLocationSharing] = useState(true)
 
-  const isLoading = (!profileData && !profileError) || (!teamData && !teamError)
+  const [zones, setZones] = useState<MapZone[]>([])
+  const [locations, setLocations] = useState<ApiLocation[]>([])
+  const [routeHistory, setRouteHistory] = useState<[number, number][]>([])
+  const [locationSharing, setLocationSharing] = useState(true)
+  const [isZonesLoading, setIsZonesLoading] = useState(true)
+  const [showRoute, setShowRoute] = useState(false)
+
+  const geo = useGeolocation(5000)
+
+  useEffect(() => {
+    if (locationSharing) {
+      geo.startWatching()
+    } else {
+      geo.stopWatching()
+    }
+  }, [locationSharing])
+
+  useWsLocationBroadcast(
+    locationSharing ? geo.lat : null,
+    locationSharing ? geo.lng : null,
+    locationSharing ? geo.accuracy : null,
+    locationSharing && geo.lat != null && geo.lng != null
+  )
+
+  useEffect(() => {
+    const loadZones = async () => {
+      try {
+        setIsZonesLoading(true)
+        const projects = await projectService.getAll()
+        const activeProject = projects.find((p: ApiProject) => p.status === 'active') || projects[0]
+        if (!activeProject) { setZones([]); return }
+
+        const projectZones = await zoneService.getByProject(activeProject.id)
+        const transformed: MapZone[] = projectZones.map((zone: ApiZone, i: number) => ({
+          id: zone.id,
+          name: zone.name,
+          description: zone.description || '',
+          color: zoneColors[i % zoneColors.length],
+          team: '',
+          status: 'active',
+          coverage: 0,
+          boundaries: zone.boundaries ? (typeof zone.boundaries === 'string' ? JSON.parse(zone.boundaries) : zone.boundaries) as [number, number][] : undefined,
+        }))
+        setZones(transformed)
+      } catch {
+        setZones([])
+      } finally {
+        setIsZonesLoading(false)
+      }
+    }
+    loadZones()
+  }, [])
+
+  useEffect(() => {
+    const loadLocations = async () => {
+      try {
+        const res = await fetcher('/locations')
+        const locs: ApiLocation[] = res?.locations ?? []
+        setLocations(locs)
+      } catch {
+        setLocations([])
+      }
+    }
+    loadLocations()
+  }, [])
+
+  useEffect(() => {
+    if (showRoute) {
+      const loadRouteHistory = async () => {
+        try {
+          const res = await fetcher('/locations/my/history?hours=24')
+          const history: any[] = res?.history ?? []
+          const points: [number, number][] = history.map((h: any) => [h.lat, h.lng])
+          setRouteHistory(points)
+        } catch {
+          setRouteHistory([])
+        }
+      }
+      loadRouteHistory()
+    } else {
+      setRouteHistory([])
+    }
+  }, [showRoute])
+
   const user = profileData?.user || profileData || {}
-  const members: TeamMember[] = Array.isArray(teamData) ? teamData : []
+  const members: any[] = Array.isArray(teamData) ? teamData : []
   const onlineTeam = members.filter((m) => m.status === 'online')
 
-  const statusColor: Record<string, string> = {
-    online: 'bg-emerald-500',
-    idle: 'bg-amber-500',
-    offline: 'bg-muted-foreground',
-  }
+  const mapUsers: MapUser[] = useMemo(() => {
+    const seen = new Set<string>()
+    const result: MapUser[] = []
+    for (const loc of locations) {
+      if (seen.has(loc.user_id)) continue
+      seen.add(loc.user_id)
+      result.push({
+        user_id: loc.user_id,
+        name: loc.name,
+        email: loc.email,
+        role: loc.role,
+        status: loc.status,
+        lat: loc.lat,
+        lng: loc.lng,
+        accuracy: loc.accuracy,
+        updated_at: loc.updated_at,
+      })
+    }
+    const currentUserId = user?.id || 'current-user'
+    if (locationSharing && geo.lat != null && geo.lng != null && !seen.has(currentUserId)) {
+      result.push({
+        user_id: currentUserId,
+        name: user?.name || 'You',
+        role: user?.role || 'field_agent',
+        status: 'online',
+        lat: geo.lat,
+        lng: geo.lng,
+        accuracy: geo.accuracy ?? 15,
+      })
+    }
+    return result
+  }, [locations, geo.lat, geo.lng, geo.accuracy, locationSharing, user])
 
-  if (isLoading) {
+  const mapRoutes = useMemo(() => {
+    if (!showRoute || routeHistory.length < 2) return []
+    return [{
+      id: 'my-route',
+      color: '#3b82f6',
+      weight: 3,
+      points: routeHistory,
+    }]
+  }, [showRoute, routeHistory])
+
+  const mapCenter: [number, number] | undefined = useMemo(() => {
+    if (geo.lat != null && geo.lng != null) return [geo.lat, geo.lng]
+    return undefined
+  }, [geo.lat, geo.lng])
+
+  if ((!profileData && !profileError) || (!teamData && !teamError)) {
     return (
-      <div className="flex h-[400px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2 text-muted-foreground font-medium">Initializing spatial session...</span>
-      </div>
+      <>
+        <DashboardHeader
+          title="Field Map"
+          rootCrumb={{ label: 'Field', href: '/user/home' }}
+          breadcrumbs={[{ label: 'Interactive Map' }]}
+        />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="mx-auto max-w-7xl flex items-center justify-center h-[60vh]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
+      </>
     )
   }
 
@@ -54,194 +195,196 @@ export default function UserMapPage() {
         rootCrumb={{ label: 'Field', href: '/user/home' }}
         breadcrumbs={[{ label: 'Interactive Map' }]}
       />
-      <main className="flex-1 overflow-auto p-4 md:p-6 animate-in fade-in duration-700">
-        <div className="mx-auto max-w-3xl space-y-4">
+      <main className="flex-1 overflow-auto p-4 md:p-6">
+        <div className="mx-auto max-w-7xl space-y-6">
 
           {/* Header */}
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Geo-Spatial Intelligence</h1>
-              <p className="text-sm text-muted-foreground">Monitor zone boundaries and team proximity in real-time</p>
+              <h1 className="text-2xl font-bold tracking-tight">Field Map</h1>
+              <p className="text-sm text-muted-foreground">View your zone and nearby team members</p>
             </div>
-            <Button
-              variant={locationSharing ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setLocationSharing(!locationSharing)}
-              className={cn('gap-2 shrink-0 shadow-sm transition-all active:scale-95 group', locationSharing ? 'bg-emerald-600 hover:bg-emerald-700' : '')}
-            >
-              <Radio className={cn("h-3.5 w-3.5", locationSharing && "animate-pulse")} />
-              {locationSharing ? 'Broadcasting Live' : 'Go Visible'}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Wifi className={cn('h-4 w-4', locationSharing ? 'text-emerald-500' : 'text-muted-foreground')} />
+              <Switch checked={locationSharing} onCheckedChange={setLocationSharing} />
+              <span className="text-sm text-muted-foreground">
+                {locationSharing ? 'Location visible' : 'Location hidden'}
+              </span>
+            </div>
           </div>
 
-          {/* Zone info bar */}
-          <Card className="border-primary/10 bg-primary/[0.01] shadow-inner">
-            <CardContent className="p-4 flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <MapPin className="h-4 w-4 text-primary" />
+          {/* Info bar */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <MapPin className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Assigned Sector</p>
-                  <p className="font-bold text-xs uppercase">{user.assigned_zone || 'Pending assignment'}</p>
+                  <p className="text-xs text-muted-foreground">Assigned Zone</p>
+                  <p className="font-semibold">{user.assigned_zone || zones[0]?.name || 'Not assigned'}</p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 border-l border-primary/10 pl-4">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Navigation className="h-4 w-4 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Map Provider</p>
-                  <p className="font-bold text-xs text-amber-600">Google Maps integration pending</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 border-l border-primary/10 pl-4">
-                <div className="p-2 bg-purple-500/10 rounded-lg">
-                  <Users className="h-4 w-4 text-purple-600" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+                  <Navigation className="h-5 w-5 text-blue-500" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Co-Presence</p>
-                  <p className="font-bold text-xs">{onlineTeam.length} Active Near You</p>
+                  <p className="text-xs text-muted-foreground">Your Position</p>
+                  <p className="font-semibold">
+                    {geo.lat != null && geo.lng != null
+                      ? `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`
+                      : geo.error ? 'Unavailable' : 'Locating...'}
+                  </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
+                  <Users className="h-5 w-5 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Team Online</p>
+                  <p className="font-semibold">{onlineTeam.length} nearby</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-          {/* Map placeholder */}
-          <Card className="overflow-hidden border-primary/20 shadow-2xl relative group">
-            <div className="relative bg-muted/40 h-72 md:h-96 flex items-center justify-center border-b border-border overflow-hidden">
-              {/* Temporary placeholder map until Google Maps API is added */}
-              <svg viewBox="0 0 500 320" className="w-full h-full opacity-60 transition-transform duration-1000 group-hover:scale-[1.02]" preserveAspectRatio="xMidYMid slice">
-                <rect width="500" height="320" fill="hsl(var(--muted)/0.3)" />
-                {[0,50,100,150,200,250,300,350,400,450,500].map(x => (
-                  <line key={`vx${x}`} x1={x} y1="0" x2={x} y2="320" stroke="hsl(var(--border))" strokeWidth="0.5" />
-                ))}
-                {[0,40,80,120,160,200,240,280,320].map(y => (
-                  <line key={`hy${y}`} x1="0" y1={y} x2="500" y2={y} stroke="hsl(var(--border))" strokeWidth="0.5" />
-                ))}
-                
-                {/* Zone Polygon */}
-                <polygon
-                  points="100,40 380,40 420,160 340,280 120,280 60,160"
-                  fill="hsl(var(--primary)/0.05)"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth="2.5"
-                  strokeDasharray="10,5"
-                  className="animate-pulse"
+          {/* Geolocation error */}
+          {geo.error && (
+            <Card className="border-amber-500/30 bg-amber-500/5">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Unable to get your location</p>
+                  <p className="text-xs text-muted-foreground">{geo.error}</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={geo.startWatching}>Retry</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Map */}
+          <Card className="overflow-hidden">
+            <div className="relative h-72 md:h-[500px]">
+              {(isZonesLoading || (!geo.lat && !zones.length)) ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <BaseMap
+                  center={mapCenter}
+                  zoom={15}
+                  users={mapUsers}
+                  zones={zones}
+                  routes={mapRoutes}
+                  showUsers={true}
+                  showZones={true}
+                  showCoverage={false}
+                  showLabels={true}
                 />
-                
-                {/* Simulated Members */}
-                {onlineTeam.slice(0, 4).map((_, i) => (
-                  <circle 
-                    key={`m-${i}`} 
-                    cx={150 + (i * 60)} 
-                    cy={100 + (i * 40)} 
-                    r="8" 
-                    fill="#10b981" 
-                    className="animate-bounce" 
-                    style={{ animationDelay: `${i * 0.2}s`, animationDuration: '3s' }}
-                  />
-                ))}
+              )}
 
-                {/* User Location Node */}
-                <g className="user-node">
-                  <circle cx="245" cy="160" r="28" fill="hsl(var(--primary)/0.1)" className="animate-ping" />
-                  <circle cx="245" cy="160" r="16" fill="hsl(var(--primary)/0.2)" />
-                  <circle cx="245" cy="160" r="10" fill="hsl(var(--primary))" stroke="white" strokeWidth="2" />
-                </g>
-              </svg>
-
-              {/* Map controls */}
-              <div className="absolute top-4 right-4 flex flex-col gap-2">
-                <Button size="icon" variant="secondary" className="h-10 w-10 shadow-xl hover:bg-primary hover:text-white transition-all scale-95 hover:scale-105">
-                  <ZoomIn className="h-5 w-5" />
+              {/* Center button */}
+              <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="h-9 w-9 shadow-sm bg-background"
+                  onClick={() => geo.startWatching()}
+                >
+                  <Crosshair className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="secondary" className="h-10 w-10 shadow-xl hover:bg-primary hover:text-white transition-all scale-95 hover:scale-105">
-                  <ZoomOut className="h-5 w-5" />
-                </Button>
-                <Button size="icon" variant="default" className="h-10 w-10 shadow-xl bg-primary text-white scale-100 hover:scale-110 active:scale-95 transition-all">
-                  <Crosshair className="h-5 w-5" />
+                <Button
+                  size="icon"
+                  variant={showRoute ? 'default' : 'outline'}
+                  className={cn('h-9 w-9 shadow-sm bg-background', showRoute && '!bg-blue-500 !text-white')}
+                  onClick={() => setShowRoute(!showRoute)}
+                  title="Show route history"
+                >
+                  <Navigation className="h-4 w-4" />
                 </Button>
               </div>
 
-              {/* Legend overlay */}
-              <div className="absolute bottom-4 left-4 bg-background/80 backdrop-blur-md rounded-xl p-4 border border-primary/20 shadow-2xl space-y-2">
-                 <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-2 border-b border-primary/10 pb-1">Legend</h4>
-                 <div className="flex items-center gap-2 text-[10px] font-bold">
-                    <span className="h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-primary/20" /> YOUR POSITION
-                 </div>
-                 <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" /> TEAM ACTIVE
-                 </div>
-                 <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600">
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> TEAM IDLE
-                 </div>
-              </div>
-
-              {/* Zone Tag */}
-              <div className="absolute top-4 left-4">
-                 <Badge className="bg-primary text-white font-black px-3 py-1.5 rounded-lg shadow-lg text-[10px] tracking-widest border-none">
-                   {user.assigned_zone || 'OPERATIONAL SECTOR'}
-                 </Badge>
+              {/* Legend */}
+              <div className="absolute bottom-4 left-4 z-[1000] bg-background/90 backdrop-blur-sm rounded-lg p-3 border shadow-sm space-y-1.5">
+                <p className="text-xs font-medium mb-1.5 pb-1.5 border-b">Legend</p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full bg-primary" /> Your position
+                </div>
+                <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Team active
+                </div>
+                {showRoute && (
+                  <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                    <span className="h-0.5 w-5 bg-blue-500" /> Route history
+                  </div>
+                )}
               </div>
             </div>
 
-              {/* Map footer */}
-            <CardContent className="p-4 flex items-center justify-between bg-muted/5">
+            <CardContent className="p-3 flex items-center justify-between bg-muted/20 border-t">
               <div className="flex items-center gap-2">
-                <div className={cn('h-2.5 w-2.5 rounded-full shadow-sm', locationSharing ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground')} />
-                <span className="text-xs font-bold text-muted-foreground/80 lowercase">
-                  {locationSharing ? 'Location sharing enabled for team coordination' : 'Session privacy layer active'}
+                <div className={cn('h-2 w-2 rounded-full', locationSharing ? 'bg-emerald-500' : 'bg-muted-foreground')} />
+                <span className="text-xs text-muted-foreground">
+                  {locationSharing ? 'Sharing location with your team' : 'Location hidden from team'}
                 </span>
               </div>
-              <span className="text-[10px] font-black text-primary/40 uppercase tracking-tighter">google maps api: coming soon</span>
+              <span className="text-xs text-muted-foreground">OpenStreetMap via Leaflet</span>
             </CardContent>
           </Card>
 
-          {/* Warning for shared location */}
+          {/* Warning when location sharing is off */}
           {!locationSharing && (
-            <Card className="border-amber-200 bg-amber-50 shadow-sm animate-in slide-in-from-top-2">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                </div>
+            <Card className="border-amber-500/30 bg-amber-500/5">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-amber-900 uppercase tracking-tight">Ghost Mode Active</p>
-                  <p className="text-xs text-amber-700 font-medium leading-tight">Your live telemetry is hidden. Supervisors cannot perform emergency assistance without a location fix.</p>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Location sharing disabled</p>
+                  <p className="text-xs text-muted-foreground">Your team cannot see your position. Supervisors may not be able to assist without a location fix.</p>
                 </div>
-                <Button size="sm" onClick={() => setLocationSharing(true)} className="bg-amber-600 hover:bg-amber-700 font-bold px-4">
-                  Restore Sync
+                <Button size="sm" variant="outline" onClick={() => setLocationSharing(true)} className="shrink-0">
+                  Enable
                 </Button>
               </CardContent>
             </Card>
           )}
 
           {/* Team proximity list */}
-          <Card className="border-primary/5 shadow-sm overflow-hidden">
-            <CardHeader className="pb-3 border-b border-primary/5 bg-primary/[0.02]">
-              <CardTitle className="text-xs font-black uppercase tracking-widest text-primary flex items-center justify-between">
-                <span>Nearby Operatives</span>
-                <Users className="h-4 w-4 opacity-40" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                Nearby Team
               </CardTitle>
+              <CardDescription>Team members in your area</CardDescription>
             </CardHeader>
-            <CardContent className="p-0 divide-y divide-primary/5">
-              {members.length > 0 ? members.slice(0, 4).map((m) => (
-                <div key={m.id} className="flex items-center gap-4 p-4 hover:bg-primary/[0.01] transition-all">
-                  <div className={cn('h-3 w-3 rounded-full shrink-0 shadow-inner', statusColor[m.status || 'offline'] || statusColor['offline'])} />
+            <CardContent className="divide-y">
+              {members.length > 0 ? members.slice(0, 6).map((m) => (
+                <div key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <div className={cn('h-2.5 w-2.5 rounded-full shrink-0', {
+                    'bg-emerald-500': m.status === 'online',
+                    'bg-amber-500': m.status === 'idle',
+                    'bg-muted-foreground': m.status === 'offline' || !m.status,
+                  })} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold flex items-center gap-2 truncate">
+                    <p className="text-sm font-medium truncate">
                       {m.name || m.email?.split('@')[0]}
-                      {m.role === 'team_leader' && <Badge variant="outline" className="text-[8px] h-4 px-1 lowercase font-black border-primary/30 text-primary">leader</Badge>}
                     </p>
+                    <p className="text-xs text-muted-foreground">{m.role}</p>
                   </div>
-                  <Badge variant="secondary" className="text-[10px] font-black tracking-tighter opacity-70">
-                    {m.status?.toUpperCase() || 'OFFLINE'}
+                  <Badge variant="secondary" className="text-xs">
+                    {m.status || 'offline'}
                   </Badge>
                 </div>
               )) : (
-                <div className="p-8 text-center text-muted-foreground flex flex-col items-center gap-2 opacity-40">
-                   <Users className="h-8 w-8" />
-                   <span className="text-xs font-bold uppercase tracking-widest">Scanning for nearby team...</span>
+                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                  <Users className="h-8 w-8 mb-2 opacity-40" />
+                  <p className="text-sm">No team members nearby</p>
                 </div>
               )}
             </CardContent>
@@ -251,4 +394,3 @@ export default function UserMapPage() {
     </>
   )
 }
-

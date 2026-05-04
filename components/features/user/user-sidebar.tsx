@@ -24,19 +24,20 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { BrandLogo } from '@/components/shared/branding/brand-logo'
 import { useTheme } from 'next-themes'
+import { useUnreadNotifications, useNotificationListener } from '@/hooks/use-notifications'
 
 export function UserSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
+  const unreadNotifications = useUnreadNotifications()
+  useNotificationListener()
 
   const isLinkActive = (href: string) => {
     return pathname === href || pathname.startsWith(href + '/')
   }
 
-  const notifications: { isRead: boolean }[] = []
   const syncData = { pending: 0, failed: 0 }
-  const unreadNotifications = 0
   const pendingSync = syncData.pending + syncData.failed
   const syncFailed = syncData.failed
 

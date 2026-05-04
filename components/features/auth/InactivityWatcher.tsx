@@ -47,7 +47,6 @@ export function InactivityWatcher() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          logout("inactivity");
           return 0;
         }
         return prev - 1;
@@ -55,7 +54,14 @@ export function InactivityWatcher() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [open, logout]);
+  }, [open]);
+
+  // Trigger logout when countdown reaches 0 (outside render)
+  useEffect(() => {
+    if (open && countdown === 0) {
+      logout("inactivity");
+    }
+  }, [open, countdown, logout]);
 
   // "Stay logged in" — update activity and close modal
   const handleStayLoggedIn = useCallback(() => {

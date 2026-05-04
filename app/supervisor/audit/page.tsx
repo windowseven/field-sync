@@ -18,8 +18,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { auditService, type AuditEntry as ApiAuditEntry } from '@/lib/api/auditService'
 
-type ActionCategory = 'user' | 'team' | 'zone' | 'form' | 'task' | 'project' | 'security'
+type ActionCategory = 'user' | 'team' | 'zone' | 'form' | 'task' | 'project' | 'security' | 'auth' | 'system'
 
 interface AuditEntry {
   id: string
@@ -32,21 +33,6 @@ interface AuditEntry {
   ip?: string
   detail?: string
 }
-
-const entries: AuditEntry[] = [
-  { id: '1', actor: 'Jane Supervisor', actorRole: 'Supervisor', action: 'Assigned task', target: '"Complete Zone A Survey" → Team Alpha', category: 'task', timestamp: 'Apr 9, 2026 · 09:42', detail: 'Priority: High · Deadline: Apr 15' },
-  { id: '2', actor: 'Sarah Johnson', actorRole: 'Team Leader', action: 'Submitted forms', target: '22 forms in Zone A (batch)', category: 'form', timestamp: 'Apr 9, 2026 · 09:31' },
-  { id: '3', actor: 'Jane Supervisor', actorRole: 'Supervisor', action: 'Generated invite link', target: 'ALPHA-X9K2 (Field User, Team Alpha)', category: 'user', timestamp: 'Apr 9, 2026 · 08:55' },
-  { id: '4', actor: 'James Kariuki', actorRole: 'Team Leader', action: 'Marked task complete', target: 'GPS calibration check', category: 'task', timestamp: 'Apr 9, 2026 · 08:20', detail: 'Confirmed by: Amara Diallo' },
-  { id: '5', actor: 'Jane Supervisor', actorRole: 'Supervisor', action: 'Updated zone boundaries', target: 'Zone C — extended eastern edge', category: 'zone', timestamp: 'Apr 8, 2026 · 17:14' },
-  { id: '6', actor: 'Ngozi Adeyemi', actorRole: 'Field User', action: 'Joined project', target: 'Urban Survey — Nairobi', category: 'user', timestamp: 'Apr 8, 2026 · 15:03', ip: '41.90.64.12' },
-  { id: '7', actor: 'Jane Supervisor', actorRole: 'Supervisor', action: 'Removed user from project', target: 'ex-member@survey.co', category: 'security', timestamp: 'Apr 8, 2026 · 14:30', detail: 'Reason: Inactive for 14 days' },
-  { id: '8', actor: 'Chioma Obi', actorRole: 'Team Leader', action: 'Updated team info', target: 'Team Delta — description updated', category: 'team', timestamp: 'Apr 8, 2026 · 12:00' },
-  { id: '9', actor: 'Jane Supervisor', actorRole: 'Supervisor', action: 'Assigned form to team', target: '"Infrastructure Audit" → Team Beta', category: 'form', timestamp: 'Apr 7, 2026 · 11:22' },
-  { id: '10', actor: 'Jane Supervisor', actorRole: 'Supervisor', action: 'Created team', target: 'Team Echo (8 members)', category: 'team', timestamp: 'Apr 6, 2026 · 09:05' },
-  { id: '11', actor: 'Mwangi Njoroge', actorRole: 'Team Leader', action: 'Submitted forms', target: '18 forms in Zone H', category: 'form', timestamp: 'Apr 5, 2026 · 16:48' },
-  { id: '12', actor: 'Jane Supervisor', actorRole: 'Supervisor', action: 'Created zone', target: 'Zone H — Kibera (3.1 km²)', category: 'zone', timestamp: 'Mar 1, 2026 · 10:00' },
-]
 
 const categoryConfig: Record<ActionCategory, { icon: React.ElementType; color: string; bg: string; label: string }> = {
   user: { icon: UserPlus, color: 'text-primary', bg: 'bg-primary/10', label: 'User' },
@@ -62,6 +48,34 @@ export default function SupervisorAuditPage() {
   const [search, setSearch] = React.useState('')
   const [categoryFilter, setCategoryFilter] = React.useState('all')
   const [actorFilter, setActorFilter] = React.useState('all')
+  const [entries, setEntries] = React.useState<AuditEntry[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    const fetchAuditLogs = async () => {
+      try {
+        setLoading(true)
+        const logs = await auditService.getAll({ limit: 100 })
+        const transformed = logs.map((log: ApiAuditEntry) => ({
+          id: log.id,
+          actor: log.user_name || 'System',
+          actorRole: log.user_role || 'Unknown',
+          action: log.action,
+          target: log.target_name || log.target_type || 'N/A',
+          category: (log.category || 'system') as ActionCategory,
+          timestamp: new Date(log.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          ip: log.ip_address,
+          detail: log.detail,
+        }))
+        setEntries(transformed)
+      } catch (error) {
+        console.error('Failed to fetch audit logs:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAuditLogs()
+  }, [])
 
   const filtered = entries.filter(e => {
     const matchSearch = e.action.toLowerCase().includes(search.toLowerCase()) ||

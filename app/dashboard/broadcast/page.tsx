@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Megaphone, Send, Users, UserCog, Globe, Clock, CheckCircle2, AlertTriangle, Bell, Trash2 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,14 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-
-const pastBroadcasts = [
-  { id: 'bc-001', title: 'Scheduled Maintenance Tonight', audience: 'All Users', sent: '2h ago', delivered: 284, read: 201, type: 'maintenance', status: 'delivered' },
-  { id: 'bc-002', title: 'New Feature: Offline Sync Improved', audience: 'All Supervisors', sent: '1 day ago', delivered: 7, read: 7, type: 'announcement', status: 'delivered' },
-  { id: 'bc-003', title: 'GPS Tracking Issue Resolved', audience: 'All Users', sent: '2 days ago', delivered: 284, read: 256, type: 'alert', status: 'delivered' },
-  { id: 'bc-004', title: 'Platform Update v1.2.0', audience: 'All Users', sent: '5 days ago', delivered: 261, read: 198, type: 'announcement', status: 'delivered' },
-  { id: 'bc-005', title: 'Supervisor Meeting — April 10', audience: 'All Supervisors', sent: '6 days ago', delivered: 7, read: 5, type: 'announcement', status: 'delivered' },
-]
+import { broadcastService, BroadcastMessage, BroadcastSnapshot } from '@/lib/api/broadcastService'
 
 const typeConfig: Record<string, { className: string; icon: React.ElementType; label: string }> = {
   maintenance: { className: 'bg-amber-500/10 text-amber-500', icon: AlertTriangle, label: 'Maintenance' },
@@ -40,20 +33,57 @@ export default function BroadcastPage() {
   const [type, setType] = useState('announcement')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [snapshot, setSnapshot] = useState<BroadcastSnapshot | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSend = () => {
-    if (!title || !message) return
-    setSending(true)
-    setTimeout(() => {
-      setSending(false)
-      setSent(true)
-      setTitle('')
-      setMessage('')
-      setTimeout(() => setSent(false), 3000)
-    }, 1800)
+  useEffect(() => {
+    loadBroadcasts()
+  }, [])
+
+  const loadBroadcasts = async () => {
+    try {
+      setLoading(true)
+      const data = await broadcastService.getSnapshot()
+      setSnapshot(data)
+    } catch {
+      setError('Failed to load broadcast history')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const audienceCount: Record<string, number> = { all: 284, supervisors: 7, workers: 236 }
+  const handleSend = async () => {
+    if (!title || !message) return
+    setSending(true)
+    try {
+      await broadcastService.send({ title, message, audience, type })
+      setTitle('')
+      setMessage('')
+      setSent(true)
+      await loadBroadcasts()
+      setTimeout(() => setSent(false), 3000)
+    } catch {
+      setError('Failed to send broadcast')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const formatTime = (iso: string) => {
+    const date = new Date(iso)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
+    return date.toLocaleDateString()
+  }
+
+  const audienceCount = snapshot?.audienceCounts ?? { all: 0, supervisors: 0, workers: 0 }
+  const broadcasts = snapshot?.broadcasts ?? []
+  const totalBroadcasts = broadcasts.length
 
   return (
     <>
@@ -66,12 +96,20 @@ export default function BroadcastPage() {
             <p className="text-muted-foreground">Send system-wide announcements, alerts, and maintenance notices</p>
           </div>
 
+          {error && (
+            <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-3">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {error}
+              <Button variant="ghost" size="sm" className="ml-auto h-6" onClick={() => setError(null)}>Dismiss</Button>
+            </div>
+          )}
+
           {/* Stats */}
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              { label: 'Total Recipients', value: '284', icon: Globe, color: 'text-primary', bg: 'bg-primary/10' },
-              { label: 'Supervisors', value: '7', icon: UserCog, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-              { label: 'Broadcasts Sent', value: pastBroadcasts.length.toString(), icon: Megaphone, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+              { label: 'Total Recipients', value: audienceCount.all.toString(), icon: Globe, color: 'text-primary', bg: 'bg-primary/10' },
+              { label: 'Supervisors', value: audienceCount.supervisors.toString(), icon: UserCog, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+              { label: 'Broadcasts Sent', value: loading ? '...' : totalBroadcasts.toString(), icon: Megaphone, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
             ].map((s) => (
               <Card key={s.label}>
                 <CardContent className="p-4">
@@ -115,7 +153,7 @@ export default function BroadcastPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Will reach {audienceCount[audience].toLocaleString()} user{audienceCount[audience] !== 1 ? 's' : ''}
+                    Will reach {(audienceCount[audience as keyof typeof audienceCount] ?? 0).toLocaleString()} user{(audienceCount[audience as keyof typeof audienceCount] ?? 0) !== 1 ? 's' : ''}
                   </p>
                 </div>
 
@@ -126,9 +164,9 @@ export default function BroadcastPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="announcement">📢 Announcement</SelectItem>
-                      <SelectItem value="maintenance">🔧 Maintenance</SelectItem>
-                      <SelectItem value="alert">🚨 Alert</SelectItem>
+                      <SelectItem value="announcement">Announcement</SelectItem>
+                      <SelectItem value="maintenance">Maintenance</SelectItem>
+                      <SelectItem value="alert">Alert</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -183,46 +221,56 @@ export default function BroadcastPage() {
                         <TableHead>Delivered</TableHead>
                         <TableHead>Read</TableHead>
                         <TableHead>Sent</TableHead>
-                        <TableHead></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pastBroadcasts.map((b) => {
-                        const tc = typeConfig[b.type]
-                        const readRate = Math.round((b.read / b.delivered) * 100)
-                        return (
-                          <TableRow key={b.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium text-sm">{b.title}</p>
-                                <Badge variant="secondary" className={cn('text-[10px] mt-0.5', tc.className)}>
-                                  <tc.icon className="h-2.5 w-2.5 mr-1" />
-                                  {tc.label}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell><span className="text-sm text-muted-foreground">{b.audience}</span></TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                <span className="text-sm">{b.delivered}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div>
-                                <span className="text-sm font-medium">{b.read}</span>
-                                <span className="text-xs text-muted-foreground ml-1">({readRate}%)</span>
-                              </div>
-                            </TableCell>
-                            <TableCell><span className="text-sm text-muted-foreground">{b.sent}</span></TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            <Clock className="h-5 w-5 animate-spin mx-auto mb-2" />
+                            Loading broadcasts...
+                          </TableCell>
+                        </TableRow>
+                      ) : broadcasts.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            No broadcasts sent yet
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        broadcasts.map((b) => {
+                          const tc = typeConfig[b.type] || typeConfig.announcement
+                          const Icon = tc.icon
+                          const readRate = b.deliveredCount > 0 ? Math.round((b.readCount / b.deliveredCount) * 100) : 0
+                          return (
+                            <TableRow key={b.id}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-sm">{b.title}</p>
+                                  <Badge variant="secondary" className={cn('text-[10px] mt-0.5', tc.className)}>
+                                    <Icon className="h-2.5 w-2.5 mr-1" />
+                                    {tc.label}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell><span className="text-sm text-muted-foreground">{b.audienceLabel}</span></TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span className="text-sm">{b.deliveredCount}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <span className="text-sm font-medium">{b.readCount}</span>
+                                  <span className="text-xs text-muted-foreground ml-1">({readRate}%)</span>
+                                </div>
+                              </TableCell>
+                              <TableCell><span className="text-sm text-muted-foreground">{formatTime(b.sentAt)}</span></TableCell>
+                            </TableRow>
+                          )
+                        })
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -235,4 +283,3 @@ export default function BroadcastPage() {
     </>
   )
 }
-

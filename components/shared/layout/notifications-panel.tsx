@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,52 +14,19 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Trash2,
   Bell,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
-
-interface Notification {
-  id: number;
-  type: 'critical' | 'success' | 'warning' | 'info';
-  title: string;
-  message: string;
-  timestamp: Date;
-  read: boolean;
-}
-
-const initialNotifications: Notification[] = [
-  {
-    id: 1,
-    type: 'critical',
-    title: 'Zone A Coverage Alert',
-    message: 'Coverage dropped below 80% threshold',
-    timestamp: new Date(Date.now() - 5 * 60000),
-    read: false,
-  },
-  {
-    id: 2,
-    type: 'warning',
-    title: 'Team Delay',
-    message: 'Team Beta has pending tasks overdue',
-    timestamp: new Date(Date.now() - 15 * 60000),
-    read: false,
-  },
-  {
-    id: 3,
-    type: 'success',
-    title: 'Zone Completed',
-    message: 'Zone D completed 100% coverage',
-    timestamp: new Date(Date.now() - 2 * 3600000),
-    read: true,
-  },
-];
+import { fieldSyncSocket } from '@/lib/auth/socketManager';
+import { useUnreadNotifications, useNotificationListener } from '@/hooks/use-notifications';
+import { notificationService } from '@/lib/api/notificationService';
 
 function getNotificationIcon(type: string) {
   switch (type) {
     case 'critical':
     case 'warning':
+    case 'alert':
       return <AlertCircle className="h-4 w-4 text-amber-500" />;
     case 'success':
       return <CheckCircle2 className="h-4 w-4 text-green-500" />;
@@ -69,25 +36,71 @@ function getNotificationIcon(type: string) {
 }
 
 export function NotificationsPanel() {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const pathname = usePathname();
+  const roleRoot = pathname.split('/')[1] || 'dashboard';
+  
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const unreadCount = useUnreadNotifications();
+  useNotificationListener();
+  const [open, setOpen] = useState(false);
+  const hasLoaded = useRef(false);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const handleMarkAsRead = (id: number) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
+  const fetchNotifications = async () => {
+    try {
+      const all = await notificationService.getAll();
+      setNotifications(all.slice(0, 5));
+      hasLoaded.current = true;
+    } catch (e) {
+      console.error('Failed to fetch notifications', e);
+    }
   };
 
-  const handleDelete = (id: number) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  useEffect(() => {
+    fetchNotifications();
+
+    const unsubNotif = fieldSyncSocket.on('notification:new', () => {
+      fetchNotifications();
+    });
+
+    const unsubBroadcast = fieldSyncSocket.on('broadcast:new', () => {
+      fetchNotifications();
+    });
+
+    return () => {
+      unsubNotif();
+      unsubBroadcast();
+    };
+  }, []);
+
+  const getNotificationsLink = () => {
+    if (roleRoot === 'supervisor') return '/supervisor/notifications';
+    if (roleRoot === 'teamleader') return '/teamleader/notifications';
+    if (roleRoot === 'user') return '/user/notifications';
+    return '/admin/notifications';
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  const handleDelete = async (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    try {
+      await notificationService.markAsRead(id);
+    } catch (e) {
+      console.error('Failed to delete notification', e);
+    }
   };
 
-  const formatTime = (date: Date) => {
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      fetchNotifications();
+    } catch (e) {
+      console.error('Failed to mark all as read', e);
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    if (!dateString) return 'now';
+    const date = new Date(dateString);
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -101,12 +114,12 @@ export function NotificationsPanel() {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white animate-pulse">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -142,7 +155,7 @@ export function NotificationsPanel() {
               <div
                 key={notification.id}
                 className={`px-4 py-3 border-b border-border/50 last:border-b-0 transition-colors ${
-                  !notification.read ? 'bg-blue-500/5' : ''
+                  !notification.is_read ? 'bg-blue-500/5' : ''
                 }`}
               >
                 <div className="flex gap-3">
@@ -164,10 +177,10 @@ export function NotificationsPanel() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {notification.message}
+                      {notification.body || notification.message}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatTime(notification.timestamp)}
+                      {formatTime(notification.created_at)}
                     </p>
                   </div>
                 </div>
@@ -184,7 +197,7 @@ export function NotificationsPanel() {
         {notifications.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <Link href="/dashboard/alerts">
+            <Link href={getNotificationsLink()}>
               <DropdownMenuItem className="text-center text-blue-600 cursor-pointer">
                 View all notifications
               </DropdownMenuItem>
@@ -195,4 +208,3 @@ export function NotificationsPanel() {
     </DropdownMenu>
   );
 }
-

@@ -16,6 +16,7 @@ import {
   Mail,
   Phone,
   Calendar,
+  Loader2,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -59,6 +60,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { teamService } from '@/lib/api/teamService'
+import { projectService, ApiProject } from '@/lib/api/projectService'
 
 interface TeamMember {
   id: string
@@ -85,106 +88,7 @@ interface Team {
   createdAt: string
 }
 
-const teams: Team[] = [
-  {
-    id: '1',
-    name: 'Team Alpha',
-    description: 'Primary field operations team for downtown area',
-    color: 'bg-chart-1',
-    zone: 'Zone A - Downtown',
-    status: 'active',
-    progress: 72,
-    createdAt: '2024-01-15',
-    leader: {
-      id: 'l1',
-      name: 'Sarah Johnson',
-      email: 'sarah@fieldsync.io',
-      phone: '+1 555-0101',
-      role: 'leader',
-      status: 'online',
-      joinedAt: '2024-01-15',
-      formsCompleted: 45,
-    },
-    members: [
-      { id: 'm1', name: 'Mike Chen', email: 'mike@fieldsync.io', phone: '+1 555-0102', role: 'member', status: 'online', joinedAt: '2024-01-16', formsCompleted: 38 },
-      { id: 'm2', name: 'Lisa Park', email: 'lisa@fieldsync.io', phone: '+1 555-0103', role: 'member', status: 'idle', joinedAt: '2024-01-18', formsCompleted: 32 },
-      { id: 'm3', name: 'Tom Wilson', email: 'tom@fieldsync.io', phone: '+1 555-0104', role: 'member', status: 'online', joinedAt: '2024-01-20', formsCompleted: 28 },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Team Beta',
-    description: 'Northern district operations team',
-    color: 'bg-chart-2',
-    zone: 'Zone B - North District',
-    status: 'active',
-    progress: 45,
-    createdAt: '2024-01-20',
-    leader: {
-      id: 'l2',
-      name: 'James Miller',
-      email: 'james@fieldsync.io',
-      phone: '+1 555-0201',
-      role: 'leader',
-      status: 'online',
-      joinedAt: '2024-01-20',
-      formsCompleted: 52,
-    },
-    members: [
-      { id: 'm4', name: 'Emma Davis', email: 'emma@fieldsync.io', phone: '+1 555-0202', role: 'member', status: 'online', joinedAt: '2024-01-21', formsCompleted: 41 },
-      { id: 'm5', name: 'Chris Lee', email: 'chris@fieldsync.io', phone: '+1 555-0203', role: 'member', status: 'offline', joinedAt: '2024-01-22', formsCompleted: 35 },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Team Gamma',
-    description: 'Industrial zone operations team',
-    color: 'bg-chart-3',
-    zone: 'Zone C - Industrial',
-    status: 'active',
-    progress: 88,
-    createdAt: '2024-02-01',
-    leader: {
-      id: 'l3',
-      name: 'Alex Turner',
-      email: 'alex@fieldsync.io',
-      phone: '+1 555-0301',
-      role: 'leader',
-      status: 'online',
-      joinedAt: '2024-02-01',
-      formsCompleted: 67,
-    },
-    members: [
-      { id: 'm6', name: 'Maria Garcia', email: 'maria@fieldsync.io', phone: '+1 555-0302', role: 'member', status: 'idle', joinedAt: '2024-02-02', formsCompleted: 48 },
-      { id: 'm7', name: 'David Kim', email: 'david@fieldsync.io', phone: '+1 555-0303', role: 'member', status: 'online', joinedAt: '2024-02-03', formsCompleted: 55 },
-      { id: 'm8', name: 'Rachel Brown', email: 'rachel@fieldsync.io', phone: '+1 555-0304', role: 'member', status: 'online', joinedAt: '2024-02-05', formsCompleted: 42 },
-      { id: 'm9', name: 'Kevin Wu', email: 'kevin@fieldsync.io', phone: '+1 555-0305', role: 'member', status: 'offline', joinedAt: '2024-02-08', formsCompleted: 38 },
-    ],
-  },
-  {
-    id: '4',
-    name: 'Team Delta',
-    description: 'Suburban area operations',
-    color: 'bg-chart-4',
-    zone: 'Zone D - Suburbs',
-    status: 'inactive',
-    progress: 100,
-    createdAt: '2024-02-10',
-    leader: {
-      id: 'l4',
-      name: 'Nina Patel',
-      email: 'nina@fieldsync.io',
-      phone: '+1 555-0401',
-      role: 'leader',
-      status: 'online',
-      joinedAt: '2024-02-10',
-      formsCompleted: 78,
-    },
-    members: [
-      { id: 'm10', name: 'Sam Roberts', email: 'sam@fieldsync.io', phone: '+1 555-0402', role: 'member', status: 'online', joinedAt: '2024-02-11', formsCompleted: 65 },
-    ],
-  },
-]
+const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
 
 function getStatusBadge(status: Team['status']) {
   switch (status) {
@@ -209,9 +113,68 @@ function getMemberStatusColor(status: TeamMember['status']) {
 }
 
 export default function TeamsPage() {
+  const [teams, setTeams] = React.useState<Team[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
   const [searchQuery, setSearchQuery] = React.useState('')
   const [selectedTeam, setSelectedTeam] = React.useState<Team | null>(null)
   const [viewMode, setViewMode] = React.useState<'grid' | 'table'>('grid')
+
+  React.useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        setIsLoading(true)
+        const projects = await projectService.getAll()
+        const activeProject = projects.find((p: ApiProject) => p.status === 'active') || projects[0]
+        
+        if (!activeProject) {
+          setTeams([])
+          setIsLoading(false)
+          return
+        }
+
+        const projectTeams = await teamService.getByProject(activeProject.id)
+        
+        const transformed = projectTeams.map((team: any, index: number) => ({
+          id: team.id,
+          name: team.name,
+          description: team.description || '',
+          color: chartColors[index % chartColors.length],
+          zone: team.zone?.name || 'Unassigned',
+          status: team.status === 'active' ? 'active' : team.status === 'paused' ? 'paused' : 'inactive',
+          progress: Math.round((team.tasks_completed || 0) / ((team.tasks_completed || 0) + (team.tasks_pending || 1)) * 100),
+          createdAt: team.created_at || new Date().toISOString(),
+          leader: {
+            id: team.leader?.id || '',
+            name: team.leader?.name || 'Unassigned',
+            email: team.leader?.email || '',
+            phone: team.leader?.phone || '',
+            role: 'leader',
+            status: team.leader?.status === 'active' ? 'online' : team.leader?.status === 'idle' ? 'idle' : 'offline',
+            joinedAt: team.leader?.joined_at || '',
+            formsCompleted: team.leader?.submissions || 0,
+          },
+          members: (team.members || []).map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            email: m.email || '',
+            phone: m.phone || '',
+            role: 'member',
+            status: m.status === 'active' ? 'online' : m.status === 'idle' ? 'idle' : 'offline',
+            joinedAt: m.joined_at || '',
+            formsCompleted: m.submissions || 0,
+          })),
+        }))
+
+        setTeams(transformed as Team[])
+      } catch (err) {
+        console.error('Failed to fetch teams:', err)
+        setTeams([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchTeams()
+  }, [])
 
   const filteredTeams = teams.filter(
     (team) =>
@@ -221,6 +184,25 @@ export default function TeamsPage() {
 
   const totalMembers = teams.reduce((acc, team) => acc + team.members.length + 1, 0)
   const activeTeams = teams.filter((t) => t.status === 'active').length
+
+  if (isLoading) {
+    return (
+      <>
+        <DashboardHeader
+          title="Team Management"
+          breadcrumbs={[{ label: 'Teams' }]}
+        />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-muted-foreground font-medium">Loading teams...</p>
+            </div>
+          </div>
+        </main>
+      </>
+    )
+  }
 
   return (
     <>

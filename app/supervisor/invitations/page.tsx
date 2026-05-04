@@ -4,7 +4,7 @@ import * as React from 'react'
 import {
   Copy, Plus, Trash2, Link2, Users, CheckCircle2,
   Clock, XCircle, RefreshCw, Mail, UserPlus,
-  Eye, EyeOff, Shield,
+  Eye, EyeOff, Shield, Loader2,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { invitationService, CreateInviteLinkParams, SendEmailInviteParams } from '@/lib/api/invitationService'
 
 interface InviteLink {
   id: string
@@ -46,22 +47,6 @@ interface PendingInvite {
   status: 'pending' | 'accepted' | 'expired'
 }
 
-const inviteLinks: InviteLink[] = [
-  { id: '1', code: 'FS-ALPHA-7K2M', role: 'field_user', team: 'Team Alpha', uses: 7, maxUses: 10, createdAt: 'Apr 1, 2026', expiresAt: 'Apr 15, 2026', status: 'active' },
-  { id: '2', code: 'FS-BETA-9X3N', role: 'field_user', team: 'Team Beta', uses: 8, maxUses: 10, createdAt: 'Apr 1, 2026', expiresAt: 'Apr 15, 2026', status: 'active' },
-  { id: '3', code: 'FS-LEAD-4P8Q', role: 'team_leader', team: 'Team Delta', uses: 1, maxUses: 1, createdAt: 'Mar 28, 2026', expiresAt: 'Apr 10, 2026', status: 'maxed' },
-  { id: '4', code: 'FS-GAMMA-2L5R', role: 'field_user', team: 'Team Gamma', uses: 5, maxUses: 8, createdAt: 'Mar 20, 2026', expiresAt: 'Apr 3, 2026', status: 'expired' },
-  { id: '5', code: 'FS-ECHO-6W1T', role: 'field_user', team: 'Team Echo', uses: 4, maxUses: 10, createdAt: 'Apr 5, 2026', expiresAt: 'Apr 19, 2026', status: 'active' },
-]
-
-const pendingInvites: PendingInvite[] = [
-  { id: '1', email: 'njeri.mwangi@survey.co', role: 'field_user', team: 'Team Alpha', sentAt: '2h ago', status: 'pending' },
-  { id: '2', email: 'emeka.eze@survey.co', role: 'field_user', team: 'Team Beta', sentAt: '5h ago', status: 'pending' },
-  { id: '3', email: 'ama.mensah@survey.co', role: 'team_leader', team: 'Team Delta', sentAt: '1d ago', status: 'pending' },
-  { id: '4', email: 'zara.traore@survey.co', role: 'field_user', team: 'Team Gamma', sentAt: '2d ago', status: 'accepted' },
-  { id: '5', email: 'kofi.boateng@survey.co', role: 'field_user', team: 'Team Echo', sentAt: '3d ago', status: 'expired' },
-]
-
 const statusConfig = {
   active: { label: 'Active', className: 'bg-emerald-500/10 text-emerald-500' },
   expired: { label: 'Expired', className: 'bg-muted text-muted-foreground' },
@@ -76,6 +61,18 @@ export default function InvitationsPage() {
   const [newRole, setNewRole] = React.useState('field_user')
   const [newTeam, setNewTeam] = React.useState('')
   const [newMaxUses, setNewMaxUses] = React.useState('10')
+  const [newExpiresIn, setNewExpiresIn] = React.useState('7')
+
+  const [inviteLinks, setInviteLinks] = React.useState<InviteLink[]>([])
+  const [pendingInvites, setPendingInvites] = React.useState<PendingInvite[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const [isCreatingLink, setIsCreatingLink] = React.useState(false)
+  const [isSendingInvite, setIsSendingInvite] = React.useState(false)
+  const [inviteEmail, setInviteEmail] = React.useState('')
+  const [inviteRole, setInviteRole] = React.useState('field_user')
+  const [inviteTeam, setInviteTeam] = React.useState('')
 
   const handleCopy = (code: string) => {
     setShowCopied(code)
@@ -84,6 +81,127 @@ export default function InvitationsPage() {
 
   const activeLinks = inviteLinks.filter(l => l.status === 'active')
   const pendingCount = pendingInvites.filter(p => p.status === 'pending').length
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        const [links, invites] = await Promise.all([
+          invitationService.getInviteLinks(),
+          invitationService.getEmailInvites(),
+        ])
+
+        setInviteLinks(links.map(invitationService.transformInviteLink))
+        setPendingInvites(invites.map(invitationService.transformEmailInvite))
+      } catch (err) {
+        console.error('Failed to fetch invitations:', err)
+        setError('Failed to load invitations. Please try again.')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  const handleCreateLink = async () => {
+    if (!newTeam) return
+    
+    try {
+      setIsCreatingLink(true)
+      const params: CreateInviteLinkParams = {
+        role: newRole as 'team_leader' | 'field_user',
+        team: newTeam,
+        maxUses: parseInt(newMaxUses) || 10,
+        expiresInDays: parseInt(newExpiresIn) || 7,
+      }
+      const newLink = await invitationService.createInviteLink(params)
+      setInviteLinks(prev => [invitationService.transformInviteLink(newLink), ...prev])
+    } catch (err) {
+      console.error('Failed to create invite link:', err)
+    } finally {
+      setIsCreatingLink(false)
+    }
+  }
+
+  const handleSendEmailInvite = async (email: string, role: string, team: string) => {
+    if (!email || !team) return
+    
+    try {
+      setIsSendingInvite(true)
+      const params: SendEmailInviteParams = {
+        email,
+        role: role as 'team_leader' | 'field_user',
+        team,
+      }
+      const newInvite = await invitationService.sendEmailInvite(params)
+      setPendingInvites(prev => [invitationService.transformEmailInvite(newInvite), ...prev])
+    } catch (err) {
+      console.error('Failed to send email invite:', err)
+    } finally {
+      setIsSendingInvite(false)
+    }
+  }
+
+  const handleDeleteLink = async (id: string) => {
+    const success = await invitationService.deleteInviteLink(id)
+    if (success) {
+      setInviteLinks(prev => prev.filter(l => l.id !== id))
+    }
+  }
+
+  const handleDeleteEmailInvite = async (id: string) => {
+    const success = await invitationService.deleteEmailInvite(id)
+    if (success) {
+      setPendingInvites(prev => prev.filter(p => p.id !== id))
+    }
+  }
+
+  const handleResendInvite = async (id: string) => {
+    await invitationService.resendEmailInvite(id)
+  }
+
+  const handleRegenerateLink = async (id: string) => {
+    const updatedLink = await invitationService.regenerateInviteLink(id)
+    setInviteLinks(prev => prev.map(l => l.id === id ? invitationService.transformInviteLink(updatedLink) : l))
+  }
+
+  if (isLoading) {
+    return (
+      <>
+        <DashboardHeader
+          title="Invitations & Access"
+          rootCrumb={{ label: 'Supervisor', href: '/supervisor' }}
+          breadcrumbs={[{ label: 'Project Overview', href: '/supervisor' }, { label: 'Invitations' }]}
+        />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+        <DashboardHeader
+          title="Invitations & Access"
+          rootCrumb={{ label: 'Supervisor', href: '/supervisor' }}
+          breadcrumbs={[{ label: 'Project Overview', href: '/supervisor' }, { label: 'Invitations' }]}
+        />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <p className="text-muted-foreground">{error}</p>
+            <Button onClick={() => window.location.reload()}>Retry</Button>
+          </div>
+        </main>
+      </>
+    )
+  }
 
   return (
     <>
@@ -145,7 +263,7 @@ export default function InvitationsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Expires In</Label>
-                    <Select defaultValue="7">
+                    <Select value={newExpiresIn} onValueChange={setNewExpiresIn}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="1">1 day</SelectItem>
@@ -158,13 +276,14 @@ export default function InvitationsPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button className="gap-2"><Link2 className="h-4 w-4" /> Generate Link</Button>
+                  <Button className="gap-2" onClick={handleCreateLink} disabled={isCreatingLink}>
+                    {isCreatingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} Generate Link
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
 
-          {/* Summary Cards */}
           <div className="grid gap-4 sm:grid-cols-4">
             {[
               { label: 'Active Links', value: activeLinks.length, icon: Link2, color: 'text-primary', bg: 'bg-primary/10' },
@@ -195,7 +314,6 @@ export default function InvitationsPage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Invite Links Tab */}
             <TabsContent value="links">
               <Card>
                 <CardHeader>
@@ -234,11 +352,11 @@ export default function InvitationsPage() {
                               </Button>
                             )}
                             {link.status === 'active' && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRegenerateLink(link.id)}>
                                 <RefreshCw className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteLink(link.id)}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -261,7 +379,6 @@ export default function InvitationsPage() {
               </Card>
             </TabsContent>
 
-            {/* Email Invites Tab */}
             <TabsContent value="pending">
               <Card>
                 <CardHeader>
@@ -284,11 +401,11 @@ export default function InvitationsPage() {
                         <div className="space-y-4 py-2">
                           <div className="space-y-2">
                             <Label>Email Address</Label>
-                            <Input type="email" placeholder="user@example.com" />
+                            <Input type="email" placeholder="user@example.com" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} />
                           </div>
                           <div className="space-y-2">
                             <Label>Role</Label>
-                            <Select defaultValue="field_user">
+                            <Select value={inviteRole} onValueChange={setInviteRole}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="field_user">Field User</SelectItem>
@@ -298,7 +415,7 @@ export default function InvitationsPage() {
                           </div>
                           <div className="space-y-2">
                             <Label>Assign to Team</Label>
-                            <Select>
+                            <Select value={inviteTeam} onValueChange={setInviteTeam}>
                               <SelectTrigger><SelectValue placeholder="Select team..." /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="alpha">Team Alpha</SelectItem>
@@ -309,7 +426,9 @@ export default function InvitationsPage() {
                           </div>
                         </div>
                         <DialogFooter>
-                          <Button className="gap-2"><Mail className="h-4 w-4" /> Send Invite</Button>
+                          <Button className="gap-2" onClick={() => handleSendEmailInvite(inviteEmail, inviteRole, inviteTeam)} disabled={isSendingInvite}>
+                            {isSendingInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Send Invite
+                          </Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
@@ -345,7 +464,7 @@ export default function InvitationsPage() {
                           </TableCell>
                           <TableCell>
                             {invite.status === 'pending' && (
-                              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1">
+                              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleResendInvite(invite.id)}>
                                 <RefreshCw className="h-3 w-3" /> Resend
                               </Button>
                             )}
@@ -364,4 +483,3 @@ export default function InvitationsPage() {
     </>
   )
 }
-

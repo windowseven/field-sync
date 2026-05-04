@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, MapPin, Users, ListTodo, FileText, BarChart3,
-  Bell, Activity, Settings, LogOut, ChevronLeft,
+  Activity, Settings, Bell, LogOut, ChevronLeft,
   ChevronRight, Search, Plus, Filter, Users2,
-  HelpCircle, MessageCircle, Clock, Moon, Sun,
+  HelpCircle, MessageCircle, Clock, Moon, Sun, ShieldAlert,
 } from 'lucide-react'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarHeader,
@@ -24,11 +24,14 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { BrandLogo } from '@/components/shared/branding/brand-logo'
 import { useTheme } from 'next-themes'
+import { useUnreadNotifications, useNotificationListener } from '@/hooks/use-notifications'
 
 export function TeamLeaderSidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
+  const unreadNotifications = useUnreadNotifications()
+  useNotificationListener()
 
   const isLinkActive = (href: string) => {
     if (href !== pathname && !pathname.startsWith(href)) return false
@@ -41,8 +44,11 @@ export function TeamLeaderSidebar() {
     { title: 'Map', icon: MapPin, href: '/teamleader/map' },
     { title: 'Tasks', icon: ListTodo, href: '/teamleader/tasks' },
     { title: 'Forms', icon: FileText, href: '/teamleader/forms' },
+    { title: 'Interaction', icon: MessageCircle, href: '/teamleader/interaction' },
+    { title: 'Zones', icon: Users2, href: '/teamleader/zones' },
+    { title: 'Emergency', icon: ShieldAlert, href: '/teamleader/emergency' },
     { title: 'Performance', icon: BarChart3, href: '/teamleader/performance' },
-    { title: 'Notifications', icon: Bell, href: '/teamleader/notifications' },
+    { title: 'Notifications', icon: Bell, href: '/teamleader/notifications', badge: unreadNotifications > 0 ? unreadNotifications : null },
     { title: 'Activity', icon: Activity, href: '/teamleader/activity' },
     { title: 'Settings', icon: Settings, href: '/teamleader/settings' },
   ]
@@ -77,6 +83,11 @@ export function TeamLeaderSidebar() {
                     <Link href={item.href}>
                       <item.icon className={cn("h-4 w-4", isLinkActive(item.href) && "text-primary")} />
                       <span>{item.title}</span>
+                      {(item as any).badge && (
+                        <Badge variant="default" className="ml-auto h-5 px-1.5 text-[10px] group-data-[collapsible=icon]:hidden">
+                          {(item as any).badge}
+                        </Badge>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

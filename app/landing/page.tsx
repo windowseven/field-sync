@@ -99,6 +99,7 @@ function Navbar() {
     { label: "How it works", href: "#how-it-works" },
     { label: "Roles", href: "#roles" },
     { label: "Demo", href: "#demo" },
+    { label: "About", href: "/about" },
   ];
 
   return (
@@ -145,7 +146,7 @@ function Navbar() {
           {navLinks.map((l) => (
             <a key={l.label} href={l.href} onClick={() => setMobileOpen(false)} className="block text-sm text-[oklch(0.65_0_0)] hover:text-white py-1 transition-colors">{l.label}</a>
           ))}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-2 border-t border-[oklch(0.28_0.01_260)] mt-2">
             <Link href="/login" className="flex-1 text-center text-sm py-2 rounded-lg border border-[oklch(0.28_0.01_260)] text-white">Sign in</Link>
             <Link href="/register" className="flex-1 text-center text-sm py-2 rounded-lg bg-[oklch(0.7_0.18_160)] text-[oklch(0.10_0_0)] font-semibold">Get started</Link>
           </div>
@@ -1051,7 +1052,7 @@ function CTA() {
 function Footer() {
   const links = {
     Platform: ["Features", "How it works", "Roles", "Demo"],
-    Company: ["About", "Careers", "Blog", "Contact"],
+    Company: ["About", "Careers", "Blog", "FAQ", "Contact"],
     Legal: ["Privacy Policy", "Terms of Service", "Cookie Policy"],
   };
   return (
@@ -1077,11 +1078,28 @@ function Footer() {
             <div key={group}>
               <p className="text-xs font-semibold text-[oklch(0.55_0_0)] uppercase tracking-wider mb-4">{group}</p>
               <ul className="space-y-2.5">
-                {items.map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-[oklch(0.45_0_0)] hover:text-white transition-colors">{item}</a>
-                  </li>
-                ))}
+                {items.map((item) => {
+                  const hrefMap: Record<string, string> = {
+                    About: "/about",
+                    Careers: "/careers",
+                    Blog: "/blog",
+                    FAQ: "/faq",
+                    Contact: "/contact",
+                    "Privacy Policy": "/privacy",
+                    "Terms of Service": "/terms",
+                    "Cookie Policy": "/cookies",
+                    Features: "#features",
+                    "How it works": "#how-it-works",
+                    Roles: "#roles",
+                    Demo: "#demo",
+                  };
+                  const href = hrefMap[item] || "#";
+                  return (
+                    <li key={item}>
+                      <a href={href} className="text-sm text-[oklch(0.45_0_0)] hover:text-white transition-colors">{item}</a>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}

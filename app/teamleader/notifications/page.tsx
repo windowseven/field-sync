@@ -1,13 +1,20 @@
 "use client"
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Bell, MessageCircle, HelpCircle, AlertTriangle, CheckCircle, Clock, User } from 'lucide-react'
+import { Bell, MessageCircle, HelpCircle, AlertTriangle, CheckCircle, Clock, User, Megaphone, Loader2, ArrowUpCircle, XCircle, CheckCircle2 } from 'lucide-react'
+import { notificationService, ApiNotification } from '@/lib/api/notificationService'
+import { helpRequestService, ApiHelpRequest } from '@/lib/api/helpRequestService'
+import { fieldSyncSocket } from '@/lib/auth/socketManager'
+import { formatDistanceToNow } from 'date-fns'
+import { toast } from 'sonner'
 
-type NotificationType = 'help-request' | 'alert' | 'message' | 'task-update'
+type NotificationType = 'help-request' | 'alert' | 'message' | 'task-update' | 'form' | 'system' | 'task' | 'announcement'
 
 interface Notification {
   id: string
@@ -19,73 +26,122 @@ interface Notification {
   status: 'unread' | 'read'
 }
 
-const initialNotifications: Notification[] = [
-  {
-    id: 'notif-1',
-    type: 'help-request',
-    title: 'Help Request from Sarah Lee',
-    message: 'Battery low, need assistance at Zone Alpha South',
-    timestamp: '5 min ago',
-    sender: 'Sarah Lee',
-    status: 'unread',
-  },
-  {
-    id: 'notif-2',
-    type: 'alert',
-    title: 'Mike Johnson left zone',
-    message: 'Member left assigned zone boundary',
-    timestamp: '12 min ago',
-    sender: 'System',
-    status: 'unread',
-  },
-  {
-    id: 'notif-3',
-    type: 'message',
-    title: 'New message from Supervisor',
-    message: 'Good progress today, keep up the coverage',
-    timestamp: '1 hour ago',
-    sender: 'Supervisor',
-    status: 'read',
-  },
-  {
-    id: 'notif-4',
-    type: 'task-update',
-    title: 'Task #2 marked complete',
-    message: 'Jane Smith completed Zone Alpha survey',
-    timestamp: '2 hours ago',
-    sender: 'Jane Smith',
-    status: 'read',
-  },
-  {
-    id: 'notif-5',
-    type: 'help-request',
-    title: 'Help Request from Mike Johnson',
-    message: 'Cannot locate household #23, need GPS confirmation',
-    timestamp: '3 hours ago',
-    sender: 'Mike Johnson',
-    status: 'read',
-  },
-]
+function formatRelativeTime(dateString: string): string {
+  return formatDistanceToNow(new Date(dateString), { addSuffix: true })
+}
+
+function transformApiNotification(apiNotif: ApiNotification): Notification {
+  const typeMap: Record<string, NotificationType> = {
+    'task': 'task-update',
+    'form': 'help-request',
+    'message': 'message',
+    'alert': 'alert',
+    'system': 'alert',
+    'announcement': 'announcement',
+  }
+
+  const apiType = apiNotif.type.toLowerCase() as keyof typeof typeMap
+  const mappedType = typeMap[apiType] || 'message'
+
+  return {
+    id: apiNotif.id,
+    type: mappedType,
+    title: apiNotif.title,
+    message: apiNotif.body,
+    timestamp: formatRelativeTime(apiNotif.created_at),
+    sender: apiNotif.user_id || 'System',
+    status: apiNotif.is_read ? 'read' : 'unread',
+  }
+}
 
 const typeConfig: Record<NotificationType, { icon: React.ElementType; color: string; bgColor: string }> = {
   'help-request': { icon: HelpCircle, color: 'border-l-orange-500', bgColor: 'bg-orange-500/10' },
   alert: { icon: AlertTriangle, color: 'border-l-destructive', bgColor: 'bg-destructive/10' },
   message: { icon: MessageCircle, color: 'border-l-primary', bgColor: 'bg-primary/10' },
   'task-update': { icon: CheckCircle, color: 'border-l-emerald-500', bgColor: 'bg-emerald-500/10' },
+  form: { icon: HelpCircle, color: 'border-l-orange-500', bgColor: 'bg-orange-500/10' },
+  system: { icon: AlertTriangle, color: 'border-l-destructive', bgColor: 'bg-destructive/10' },
+  task: { icon: CheckCircle, color: 'border-l-emerald-500', bgColor: 'bg-emerald-500/10' },
+  announcement: { icon: Megaphone, color: 'border-l-blue-500', bgColor: 'bg-blue-500/10' },
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(initialNotifications)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [helpRequests, setHelpRequests] = useState<ApiHelpRequest[]>([])
   const [activeFilter, setActiveFilter] = useState<'all' | NotificationType>('all')
+  const [loading, setLoading] = useState(true)
+  const [respondDialog, setRespondDialog] = useState<ApiHelpRequest | null>(null)
+  const [responseNote, setResponseNote] = useState('')
+  const [responding, setResponding] = useState(false)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [apiNotifications, pendingRequests] = await Promise.all([
+          notificationService.getAll(),
+          helpRequestService.getPending(),
+        ])
+        const transformed = apiNotifications.map(transformApiNotification)
+        setNotifications(transformed)
+        setHelpRequests(pendingRequests)
+      } catch (error) {
+        console.error('Failed to fetch data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+
+    const unsubBroadcast = fieldSyncSocket.on('broadcast:new', (payload) => {
+      const data = payload as any
+      if (!data?.id) return
+      setNotifications((prev) => [{
+        id: data.id,
+        type: 'alert' as NotificationType,
+        title: data.title,
+        message: data.message,
+        timestamp: formatDistanceToNow(new Date(data.sentAt), { addSuffix: true }),
+        sender: data.senderName || 'System',
+        status: 'unread',
+      }, ...prev])
+    })
+
+    return () => unsubBroadcast()
+  }, [])
 
   const unreadCount = notifications.filter(n => n.status === 'unread').length
 
-  function markAllRead() {
-    setNotifications(prev => prev.map(n => ({ ...n, status: 'read' as const })))
+  async function markAllRead() {
+    try {
+      await notificationService.markAllAsRead()
+      setNotifications(prev => prev.map(n => ({ ...n, status: 'read' as const })))
+    } catch (error) {
+      console.error('Failed to mark all as read:', error)
+    }
   }
 
-  function markRead(id: string) {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, status: 'read' as const } : n))
+  async function markRead(id: string) {
+    try {
+      await notificationService.markAsRead(id)
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, status: 'read' as const } : n))
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error)
+    }
+  }
+
+  async function handleResponse(id: string, response: 'accepted' | 'rejected' | 'escalated') {
+    setResponding(true)
+    try {
+      await helpRequestService.respond(id, response, responseNote)
+      setHelpRequests(prev => prev.filter(r => r.id !== id))
+      toast.success(`Help request ${response}`)
+      setRespondDialog(null)
+      setResponseNote('')
+    } catch (error) {
+      toast.error('Failed to respond to help request')
+    } finally {
+      setResponding(false)
+    }
   }
 
   const filtered = activeFilter === 'all'
@@ -112,7 +168,39 @@ export default function NotificationsPage() {
         </div>
       </div>
 
-      {/* Filter buttons */}
+      {helpRequests.length > 0 && (
+        <Card className="border-orange-500/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <HelpCircle className="h-5 w-5 text-orange-500" />
+              Pending Help Requests
+              <Badge variant="destructive">{helpRequests.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {helpRequests.map((req) => (
+                <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border bg-orange-500/5">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className="text-xs capitalize">{req.type}</Badge>
+                      <span className="text-xs text-muted-foreground">{formatRelativeTime(req.created_at)}</span>
+                    </div>
+                    <p className="text-sm font-medium">{req.user_name || req.user_id}</p>
+                    <p className="text-sm text-muted-foreground truncate">{req.message}</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setRespondDialog(req); setResponseNote(''); }}>
+                      Respond
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex gap-2 flex-wrap">
         {([
           { key: 'all', label: 'All', icon: Bell },
@@ -153,7 +241,7 @@ export default function NotificationsPage() {
                 </div>
               )}
               {filtered.map((notification) => {
-                const config = typeConfig[notification.type]
+                const config = typeConfig[notification.type] || typeConfig.message
                 const Icon = config.icon
                 return (
                   <Card
@@ -202,7 +290,6 @@ export default function NotificationsPage() {
         </CardContent>
       </Card>
 
-      {/* Notification Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-2">
@@ -235,6 +322,54 @@ export default function NotificationsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!respondDialog} onOpenChange={(open) => { if (!open) { setRespondDialog(null); setResponseNote(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Respond to Help Request</DialogTitle>
+            <DialogDescription>
+              {respondDialog?.user_name || 'Team member'} requested: {respondDialog?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Badge variant="outline" className="capitalize">{respondDialog?.type}</Badge>
+            <Textarea
+              placeholder="Add a note (optional)"
+              value={responseNote}
+              onChange={(e) => setResponseNote(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => handleResponse(respondDialog!.id, 'rejected')}
+              disabled={responding}
+            >
+              {responding ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <XCircle className="h-4 w-4 mr-2" />}
+              Decline
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => handleResponse(respondDialog!.id, 'escalated')}
+              disabled={responding}
+            >
+              {responding ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowUpCircle className="h-4 w-4 mr-2" />}
+              Escalate
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => handleResponse(respondDialog!.id, 'accepted')}
+              disabled={responding}
+            >
+              {responding ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              Accept
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

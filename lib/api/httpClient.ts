@@ -104,11 +104,22 @@ export async function apiRequest<T = unknown>(
   // ─── Make request ─────────────────────────────────────────
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
 
-  const response = await fetch(url, {
-    ...fetchOptions,
-    headers,
-    credentials: "include", // Include cookies for HTTP-only cookie strategy
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...fetchOptions,
+      headers,
+      credentials: "include",
+    });
+  } catch (error) {
+    // Network-level error (no response received at all)
+    const errorMsg = error instanceof TypeError && error.message === 'Failed to fetch'
+      ? 'Cannot connect to server. Please ensure backend is running on port 5000.'
+      : error instanceof Error ? error.message : 'Network request failed';
+    
+    console.error('[HTTP] Network error:', errorMsg, 'URL:', url);
+    throw new ApiError(0, "NETWORK_ERROR", errorMsg);
+  }
 
   // ─── 401: Token expired — attempt refresh ─────────────────
   if (response.status === 401 && !_isRetry && !skipAuth) {
@@ -169,7 +180,15 @@ export async function apiRequest<T = unknown>(
       try {
         const errBody = await response.json();
         errorMessage = errBody.message ?? errorMessage;
-      } catch {}
+      } catch {
+        // Response wasn't JSON - may be network issue
+        const text = await response.text();
+        if (text) {
+          errorMessage = text;
+        } else {
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
+      }
     }
 
     throw new ApiError(response.status, "REQUEST_FAILED", errorMessage);

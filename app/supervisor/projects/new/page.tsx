@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, CheckCircle2, ChevronRight, ClipboardList,
-  MapPin, Users, Info, Calendar, Rocket,
+  MapPin, Users, Info, Calendar, Rocket, Loader2,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { projectService } from '@/lib/api/projectService'
 
 const steps = [
   { id: 1, name: 'Project Details', icon: Info },
@@ -23,10 +25,46 @@ const steps = [
 ]
 
 export default function NewProjectPage() {
+  const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    location: '',
+    startDate: '',
+    deadline: '',
+    numTeams: '',
+    submissionGoal: '',
+  })
+
+  const updateField = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
 
   const nextStep = () => setCurrentStep((s) => Math.min(s + 1, steps.length))
   const prevStep = () => setCurrentStep((s) => Math.max(s - 1, 1))
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setError('')
+    try {
+      const project = await projectService.create({
+        name: formData.name,
+        description: formData.description,
+        location: formData.location,
+        startDate: formData.startDate,
+        deadline: formData.deadline,
+        targetSubmissions: parseInt(formData.submissionGoal) || 0,
+      })
+      router.push(`/supervisor/projects/${project.id}`)
+    } catch (err) {
+      setError('Failed to create project. Please try again.')
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <>
@@ -100,16 +138,33 @@ export default function NewProjectPage() {
             </CardHeader>
 
             <CardContent className="space-y-6">
+              {error && (
+                <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                  {error}
+                </div>
+              )}
               {currentStep === 1 && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-2">
                     <Label htmlFor="pName">Project Name</Label>
-                    <Input id="pName" placeholder="e.g. Urban Census 2026" className="text-lg" />
+                    <Input
+                      id="pName"
+                      placeholder="e.g. Urban Census 2026"
+                      className="text-lg"
+                      value={formData.name}
+                      onChange={(e) => updateField('name', e.target.value)}
+                    />
                     <p className="text-xs text-muted-foreground">Give your project a descriptive and unique name.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pDesc">Description</Label>
-                    <Textarea id="pDesc" placeholder="Describe the goals and scope of this operational project..." rows={4} />
+                    <Textarea
+                      id="pDesc"
+                      placeholder="Describe the goals and scope of this operational project..."
+                      rows={4}
+                      value={formData.description}
+                      onChange={(e) => updateField('description', e.target.value)}
+                    />
                   </div>
                 </div>
               )}
@@ -120,17 +175,33 @@ export default function NewProjectPage() {
                     <Label htmlFor="pLoc">Deployment Location</Label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input id="pLoc" placeholder="e.g. Nairobi, Kenya" className="pl-9" />
+                      <Input
+                        id="pLoc"
+                        placeholder="e.g. Nairobi, Kenya"
+                        className="pl-9"
+                        value={formData.location}
+                        onChange={(e) => updateField('location', e.target.value)}
+                      />
                     </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="pStart">Estimated Start Date</Label>
-                      <Input id="pStart" type="date" />
+                      <Input
+                        id="pStart"
+                        type="date"
+                        value={formData.startDate}
+                        onChange={(e) => updateField('startDate', e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="pEnd">Estimated Deadline</Label>
-                      <Input id="pEnd" type="date" />
+                      <Input
+                        id="pEnd"
+                        type="date"
+                        value={formData.deadline}
+                        onChange={(e) => updateField('deadline', e.target.value)}
+                      />
                     </div>
                   </div>
                 </div>
@@ -150,11 +221,26 @@ export default function NewProjectPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="pTeams">Planned Number of Teams</Label>
-                      <Input id="pTeams" type="number" placeholder="5" min="1" max="100" />
+                      <Input
+                        id="pTeams"
+                        type="number"
+                        placeholder="5"
+                        min="1"
+                        max="100"
+                        value={formData.numTeams}
+                        onChange={(e) => updateField('numTeams', e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="pTarget">Total Submission Goal</Label>
-                      <Input id="pTarget" type="number" placeholder="1000" min="1" />
+                      <Input
+                        id="pTarget"
+                        type="number"
+                        placeholder="1000"
+                        min="1"
+                        value={formData.submissionGoal}
+                        onChange={(e) => updateField('submissionGoal', e.target.value)}
+                      />
                     </div>
                   </div>
                 </div>
@@ -166,26 +252,30 @@ export default function NewProjectPage() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Project Name</p>
-                        <p className="font-medium text-lg">Urban Census 2026</p>
+                        <p className="font-medium text-lg">{formData.name || '—'}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Location</p>
-                        <p className="font-medium text-lg">Nairobi, Kenya</p>
+                        <p className="font-medium text-lg">{formData.location || '—'}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Timeline</p>
-                        <p className="font-medium">May 1, 2026 — Aug 31, 2026</p>
+                        <p className="font-medium">
+                          {formData.startDate && formData.deadline
+                            ? `${new Date(formData.startDate).toLocaleDateString()} — ${new Date(formData.deadline).toLocaleDateString()}`
+                            : '—'}
+                        </p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Targets</p>
-                        <p className="font-medium">5 Teams · 1,000 Submissions</p>
+                        <p className="font-medium">{formData.numTeams || '0'} Teams · {formData.submissionGoal || '0'} Submissions</p>
                       </div>
                     </div>
                     <Separator />
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Description</p>
                       <p className="text-sm text-foreground/80 leading-relaxed italic">
-                        Detailed household survey covering infrastructure access and demographic data across central zones.
+                        {formData.description || 'No description provided'}
                       </p>
                     </div>
                   </div>
@@ -205,8 +295,17 @@ export default function NewProjectPage() {
                     Next Step <ChevronRight className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button onClick={() => window.location.href = '/supervisor/projects/proj-nairobi-2026'} className="gap-2 bg-primary hover:bg-primary/90">
-                    <Rocket className="h-4 w-4" /> Create Project Now
+                  <Button
+                    onClick={handleSubmit}
+                    className="gap-2 bg-primary hover:bg-primary/90"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Rocket className="h-4 w-4" />
+                    )}
+                    {isSubmitting ? 'Creating...' : 'Create Project Now'}
                   </Button>
                 )}
               </div>

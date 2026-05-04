@@ -1,6 +1,9 @@
 'use client'
 
 import * as React from 'react'
+import { useEffect, useState } from 'react'
+import { formService } from '@/lib/api/formService'
+import { taskService } from '@/lib/api/taskService'
 import {
   Plus, ClipboardList, CheckCircle2, Clock, AlertCircle, Eye,
   MoreHorizontal, Calendar, Users, FileText, Filter, Search,
@@ -56,23 +59,6 @@ interface Task {
   createdAt: string
 }
 
-const forms: Form[] = [
-  { id: '1', name: 'Household Survey Form', fields: 24, assignedTo: 'All Teams', zone: 'All Zones', submissions: 134, target: 200, status: 'active', mode: 'individual', createdAt: 'Mar 1, 2026' },
-  { id: '2', name: 'Business Census Form', fields: 18, assignedTo: 'Team Alpha', zone: 'Zone A', submissions: 45, target: 60, status: 'active', mode: 'individual', createdAt: 'Mar 5, 2026' },
-  { id: '3', name: 'Infrastructure Audit', fields: 31, assignedTo: 'Team Beta', zone: 'Zone C', submissions: 12, target: 30, status: 'active', mode: 'group', createdAt: 'Mar 8, 2026' },
-  { id: '4', name: 'Community Leader Interview', fields: 15, assignedTo: 'Team Gamma', zone: 'Zone E', submissions: 8, target: 20, status: 'paused', mode: 'individual', createdAt: 'Mar 10, 2026' },
-  { id: '5', name: 'Market Survey', fields: 12, assignedTo: 'Team Echo', zone: 'Zone H', submissions: 28, target: 28, status: 'completed', mode: 'individual', createdAt: 'Feb 25, 2026' },
-]
-
-const tasks: Task[] = [
-  { id: '1', title: 'Complete Zone A household survey', description: 'All 9 agents to complete 5 forms each by end of week', assignedTo: 'Team Alpha', type: 'team', priority: 'high', status: 'in_progress', deadline: 'Apr 15, 2026', createdAt: 'Apr 1, 2026' },
-  { id: '2', title: 'Brief new members on protocol', description: 'Team Delta leader must orient 3 new members on field procedures', assignedTo: 'Chioma Obi', type: 'individual', priority: 'high', status: 'pending', deadline: 'Apr 11, 2026', createdAt: 'Apr 8, 2026' },
-  { id: '3', title: 'Submit weekly progress report', description: 'All team leaders to submit progress summaries', assignedTo: 'All Team Leaders', type: 'individual', priority: 'medium', status: 'pending', deadline: 'Apr 12, 2026', createdAt: 'Apr 8, 2026' },
-  { id: '4', title: 'Re-survey Zone C boundary dispute', description: 'Verify 12 households near Zone C / Zone B overlap area', assignedTo: 'Team Beta', type: 'team', priority: 'medium', status: 'in_progress', deadline: 'Apr 14, 2026', createdAt: 'Apr 5, 2026' },
-  { id: '5', title: 'GPS calibration check', description: 'Verify all devices in Team Gamma report correct coordinates', assignedTo: 'Amara Diallo', type: 'individual', priority: 'low', status: 'completed', deadline: 'Apr 8, 2026', createdAt: 'Apr 4, 2026' },
-  { id: '6', title: 'Zone H coverage target', description: 'Reach 80% coverage before April 20', assignedTo: 'Team Echo', type: 'team', priority: 'high', status: 'overdue', deadline: 'Apr 8, 2026', createdAt: 'Mar 30, 2026' },
-]
-
 const formStatusConfig = {
   active: { label: 'Active', className: 'bg-emerald-500/10 text-emerald-500' },
   paused: { label: 'Paused', className: 'bg-amber-500/10 text-amber-500' },
@@ -93,8 +79,58 @@ const priorityConfig = {
 }
 
 export default function SupervisorFormsPage() {
-  const [search, setSearch] = React.useState('')
-  const [taskOpen, setTaskOpen] = React.useState(false)
+  const [search, setSearch] = useState('')
+  const [taskOpen, setTaskOpen] = useState(false)
+  const [forms, setForms] = useState<Form[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [formsData, tasksData] = await Promise.all([
+          formService.getAll(),
+          taskService.getAll(),
+        ])
+        setForms(formsData.map((f: any) => ({
+          id: f.id,
+          name: f.title,
+          fields: Array.isArray(f.form_schema) ? f.form_schema.length : 0,
+          assignedTo: f.creator || 'All Teams',
+          zone: f.zone_name || 'All Zones',
+          submissions: f.submissions_count || 0,
+          target: f.target_count || 100,
+          status: f.status === 'published' ? 'active' : 'draft',
+          mode: 'individual',
+          createdAt: new Date(f.created_at).toLocaleDateString(),
+        })))
+        setTasks(tasksData.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          description: t.description || '',
+          assignedTo: t.assigned_to || '',
+          type: t.mode === 'group' ? 'team' : 'individual',
+          priority: t.priority || 'medium',
+          status: t.status === 'in-progress' ? 'in_progress' : t.status,
+          deadline: t.deadline ? new Date(t.deadline).toLocaleDateString() : '',
+          createdAt: new Date(t.created_at).toLocaleDateString(),
+        })))
+      } catch (error) {
+        console.error('Failed to load data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
+  }
 
   const totalSubmissions = forms.reduce((a, f) => a + f.submissions, 0)
   const totalTarget = forms.reduce((a, f) => a + f.target, 0)

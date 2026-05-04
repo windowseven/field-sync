@@ -4,23 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { FileText, CheckCircle, Download, Eye, Edit3, Loader2 } from 'lucide-react'
+import { FileText, CheckCircle, Download, Eye, Edit3, Loader2, Users, User } from 'lucide-react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/api/swr-fetcher'
-
-type SubmissionRow = {
-  id: string
-  form_title?: string
-  form_id?: string
-  user_name?: string
-  user_id?: string
-  status?: string
-  submitted_at?: string
-  zone_name?: string
-  zone_id?: string
-}
+import { formService } from '@/lib/api/formService'
+import { teamService } from '@/lib/api/teamService'
+import { toast } from 'sonner'
 
 type FormRow = {
   id: string
@@ -41,41 +34,64 @@ const statusConfig = {
 export default function FormsPage() {
   const { data: projectsData } = useSWR('/projects', fetcher)
   const activeProjectId = projectsData?.projects?.[0]?.id || projectsData?.[0]?.id
-  const { data: submissionsData, isLoading } = useSWR(
-    activeProjectId ? `/projects/${activeProjectId}/submissions` : null,
-    fetcher
+  const { data: formsFromApi, isLoading: formsLoading } = useSWR(
+    activeProjectId ? activeProjectId : null,
+    () => formService.getByProject(activeProjectId)
   )
+  const { data: teamData } = useSWR('/team/my/members', fetcher)
   const [selectedForm, setSelectedForm] = useState<FormRow | null>(null)
   const [filter, setFilter] = useState<'all' | 'submitted' | 'pending-review' | 'draft'>('all')
-  const submissions: SubmissionRow[] = submissionsData?.submissions || []
+  const [fillingMode, setFillingMode] = useState<'individual' | 'group'>('individual')
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([])
+  const [modeDialogOpen, setModeDialogOpen] = useState(false)
 
-  const formsData: FormRow[] = submissions.map((submission) => ({
-    id: submission.id,
-    title: submission.form_title || submission.form_id || 'Untitled Form',
-    submittedBy: submission.user_name || submission.user_id || 'Unknown',
-    initials: String(submission.user_name || submission.user_id || 'U')
-      .split(' ')
-      .map((part: string) => part[0] || '')
-      .join('')
-      .slice(0, 2)
-      .toUpperCase(),
-    status:
-      submission.status === 'approved'
-        ? 'submitted'
-        : submission.status === 'pending'
-          ? 'pending-review'
-          : 'draft',
-    timestamp: submission.submitted_at
-      ? new Date(submission.submitted_at).toLocaleString()
-      : '—',
-    zone: submission.zone_name || submission.zone_id || '—',
-  }))
+  const forms: FormRow[] = (formsFromApi || []).map((form: any) => {
+    const transformed = formService.transformForFrontend(form)
+    return {
+      id: form.id,
+      title: form.title || 'Untitled Form',
+      submittedBy: transformed.creator,
+      initials: String(transformed.creator || 'U')
+        .split(' ')
+        .map((part: string) => part[0] || '')
+        .join('')
+        .slice(0, 2)
+        .toUpperCase(),
+      status:
+        form.status === 'published'
+          ? 'submitted'
+          : form.status === 'pending'
+            ? 'pending-review'
+            : 'draft',
+      timestamp: form.created_at
+        ? new Date(form.created_at).toLocaleString()
+        : '—',
+      zone: '—',
+    }
+  })
 
-  const filtered = filter === 'all' ? formsData : formsData.filter((f) => f.status === filter)
-  const pendingCount = formsData.filter((f) => f.status === 'pending-review').length
-  const draftCount = formsData.filter((f) => f.status === 'draft').length
+  const filtered = filter === 'all' ? forms : forms.filter((f) => f.status === filter)
+  const pendingCount = forms.filter((f) => f.status === 'pending-review').length
+  const draftCount = forms.filter((f) => f.status === 'draft').length
+  const teamMembers = teamData?.data?.members ?? teamData?.members ?? []
 
-  if (isLoading) {
+  const toggleMember = (userId: string) => {
+    setSelectedMembers(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    )
+  }
+
+  const handleModeSubmit = () => {
+    if (fillingMode === 'group' && selectedMembers.length === 0) {
+      toast.error('Select at least one member for group mode')
+      return
+    }
+    toast.success(`Form mode set to ${fillingMode}${fillingMode === 'group' ? ` (${selectedMembers.length} members)` : ''}`)
+    setModeDialogOpen(false)
+    setSelectedMembers([])
+  }
+
+  if (formsLoading) {
     return (
       <div className="flex h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -92,11 +108,38 @@ export default function FormsPage() {
           <p className="text-muted-foreground">Track form progress and review submissions</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Badge variant="secondary">{formsData.length} Total</Badge>
+          <Badge variant="secondary">{forms.length} Total</Badge>
           <Badge className="bg-orange-500">{pendingCount} Pending</Badge>
           <Badge variant="outline">{draftCount} Drafts</Badge>
+          <Button size="sm" variant="outline" onClick={() => setModeDialogOpen(true)}>
+            {fillingMode === 'individual' ? <User className="h-3 w-3 mr-1" /> : <Users className="h-3 w-3 mr-1" />}
+            {fillingMode === 'individual' ? 'Individual' : 'Group'} Mode
+          </Button>
         </div>
       </div>
+
+      {/* Mode indicator */}
+      <Card className="border-primary/10">
+        <CardContent className="py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {fillingMode === 'individual' ? (
+              <User className="h-5 w-5 text-primary" />
+            ) : (
+              <Users className="h-5 w-5 text-primary" />
+            )}
+            <div>
+              <p className="text-sm font-semibold capitalize">{fillingMode} Mode</p>
+              <p className="text-xs text-muted-foreground">
+                {fillingMode === 'individual'
+                  ? 'Each member fills forms independently'
+                  : `Group mode: ${selectedMembers.length || teamMembers.length} members collaborate`
+                }
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => setModeDialogOpen(true)}>Change</Button>
+        </CardContent>
+      </Card>
 
       {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">
@@ -179,7 +222,7 @@ export default function FormsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-2xl">{formsData.length}</CardTitle>
+            <CardTitle className="text-2xl">{forms.length}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wide">Total Forms</p>
@@ -188,7 +231,7 @@ export default function FormsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-2xl text-emerald-600 font-bold">
-              {formsData.filter((f) => f.status === 'submitted').length}
+              {forms.filter((f) => f.status === 'submitted').length}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -245,6 +288,64 @@ export default function FormsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Mode Dialog */}
+      <Dialog open={modeDialogOpen} onOpenChange={setModeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Form Filling Mode</DialogTitle>
+            <DialogDescription>Choose how team members fill out forms</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">Assignment Mode</Label>
+              <Select value={fillingMode} onValueChange={(v) => setFillingMode(v as 'individual' | 'group')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="individual" className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Individual — Each member fills independently
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="group">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Group — Team collaborates on shared forms
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {fillingMode === 'group' && teamMembers.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase text-muted-foreground">Select Members</Label>
+                <div className="space-y-1 max-h-48 overflow-y-auto border rounded-lg p-2">
+                  {teamMembers.map((m: any) => (
+                    <label key={m.id} className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedMembers.includes(m.id)}
+                        onChange={() => toggleMember(m.id)}
+                        className="h-4 w-4 rounded border-primary"
+                      />
+                      <span>{m.name}</span>
+                      {m.is_team_leader && <Badge variant="outline" className="text-[10px] ml-auto">Leader</Badge>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModeDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleModeSubmit}>Apply Mode</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

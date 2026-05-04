@@ -20,13 +20,13 @@ import {
 } from 'recharts'
 import { cn } from '@/lib/utils'
 
-import { analyticsService, ApiProjectAnalytics } from '@/lib/api/analyticsService'
+import { analyticsService, ProjectAnalytics } from '@/lib/api/analyticsService'
 import { useParams } from 'next/navigation'
 import { toast } from '@/components/ui/use-toast'
 
 export default function AnalyticsPage() {
   const { projectId } = useParams() as { projectId: string }
-  const [data, setData] = React.useState<ApiProjectAnalytics | null>(null)
+  const [data, setData] = React.useState<ProjectAnalytics | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -63,7 +63,8 @@ export default function AnalyticsPage() {
     return data.zonesPerformance.slice(0, 5).map((z, i) => ({
       name: z.name,
       value: z.submissions,
-      color: colors[i % colors.length]
+      color: colors[i % colors.length],
+      key: `zone-${z.name}-${i}`
     }))
   }, [data])
 
@@ -204,7 +205,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="space-y-2 mt-4">
                   {categoryData.map((cat: any) => (
-                    <div key={cat.name} className="flex items-center justify-between text-xs font-medium">
+                    <div key={cat.key || cat.name} className="flex items-center justify-between text-xs font-medium">
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.color }} />
                         <span className="text-muted-foreground">{cat.name}</span>
