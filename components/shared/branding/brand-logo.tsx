@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 type BrandLogoProps = {
@@ -17,8 +17,8 @@ export function BrandLogo({
 }: BrandLogoProps) {
   return (
     <Link href={href} className={cn("flex items-center gap-3", className)}>
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/20">
-        <ShieldCheck className="h-4 w-4" />
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-400 shadow-md shadow-emerald-500/20 overflow-hidden">
+        <Image src="/logo.svg" alt="FieldSync" width={28} height={28} className="h-7 w-7" />
       </div>
       {!compact && (
         <div className="grid leading-tight">

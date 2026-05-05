@@ -17,7 +17,7 @@ interface SocketOptions {
   onDisconnected?: () => void;
 }
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? "wss://api.fieldsync.com";
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? (process.env.NODE_ENV === 'production' ? 'wss://api.fieldsync.com' : 'ws://localhost:5000');
 
 // ─── FieldSync Socket Manager ────────────────────────────────
 class FieldSyncSocket {

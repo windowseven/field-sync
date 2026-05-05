@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import {
   Copy, Plus, Trash2, Link2, Users, CheckCircle2,
   Clock, XCircle, RefreshCw, Mail, UserPlus,
@@ -46,6 +46,7 @@ interface PendingInvite {
   email: string
   role: 'team_leader' | 'field_user'
   team: string
+  token?: string
   sentAt: string
   status: 'pending' | 'accepted' | 'expired'
 }
@@ -60,18 +61,16 @@ const statusConfig = {
 
 export default function InvitationsPage() {
   const router = useRouter()
+  const params = useParams()
+  const projectId = params.projectId as string
   const { toast } = useToast()
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const [showCopied, setShowCopied] = useState<string | null>(null)
   const [showLink, setShowLink] = useState<string | null>(null)
   const [newRole, setNewRole] = useState('field_user')
   const [newTeam, setNewTeam] = useState('')
   const [newMaxUses, setNewMaxUses] = useState('10')
   const [newExpiresIn, setNewExpiresIn] = useState('7')
-
-  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([])
-  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   const [isCreatingLink, setIsCreatingLink] = useState(false)
   const [isSendingInvite, setIsSendingInvite] = useState(false)
@@ -80,7 +79,14 @@ export default function InvitationsPage() {
   const [inviteTeam, setInviteTeam] = useState('')
 
   const handleCopy = (code: string) => {
+    navigator.clipboard.writeText(`${origin}/join/${code}`)
     setShowCopied(code)
+    setTimeout(() => setShowCopied(null), 2000)
+  }
+
+  const handleCopyEmailInvite = (id: string, token: string) => {
+    navigator.clipboard.writeText(`${origin}/join/${token}`)
+    setShowCopied(id)
     setTimeout(() => setShowCopied(null), 2000)
   }
 
@@ -94,8 +100,8 @@ export default function InvitationsPage() {
         setError(null)
 
         const [links, invites] = await Promise.all([
-          invitationService.getInviteLinks(),
-          invitationService.getEmailInvites(),
+          invitationService.getInviteLinks(projectId),
+          invitationService.getEmailInvites(projectId),
         ])
 
         setInviteLinks(links.map(invitationService.transformInviteLink))
@@ -122,6 +128,7 @@ export default function InvitationsPage() {
       const params: CreateInviteLinkParams = {
         role: newRole as 'team_leader' | 'field_user',
         team: newTeam,
+        projectId,
         maxUses: parseInt(newMaxUses) || 10,
         expiresInDays: parseInt(newExpiresIn) || 7,
       }
@@ -148,6 +155,7 @@ export default function InvitationsPage() {
         email,
         role: role as 'team_leader' | 'field_user',
         team,
+        projectId,
       }
       const newInvite = await invitationService.sendEmailInvite(params)
       setPendingInvites(prev => [invitationService.transformEmailInvite(newInvite), ...prev])
@@ -181,10 +189,13 @@ export default function InvitationsPage() {
   }
 
   const handleResendInvite = async (id: string) => {
-    const success = await invitationService.resendEmailInvite(id)
-    if (success) {
-      toast({ title: 'Email resent', description: 'Invitation email has been resent', variant: 'default' })
-    } else {
+    try {
+      const response = await invitationService.resendEmailInvite(id)
+      if (response) {
+        setPendingInvites(prev => prev.map(i => i.id === id ? invitationService.transformEmailInvite(response) : i))
+        toast({ title: 'Email resent', description: 'Invitation email has been resent', variant: 'default' })
+      }
+    } catch (err) {
       toast({ title: 'Error', description: 'Failed to resend email', variant: 'destructive' })
     }
   }
@@ -363,7 +374,7 @@ export default function InvitationsPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-mono text-sm font-medium">
-                                  {showLink === link.id ? `fieldsync.io/join/${link.code}` : `fieldsync.io/join/••••••••`}
+                                  {showLink === link.id ? `${origin}/join/${link.code}` : `${origin}/join/••••••••`}
                                 </span>
                                 <Badge variant="secondary" className={statusConfig[link.status].className}>{statusConfig[link.status].label}</Badge>
                               </div>
@@ -495,9 +506,14 @@ export default function InvitationsPage() {
                           </TableCell>
                           <TableCell>
                             {invite.status === 'pending' && (
-                              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleResendInvite(invite.id)}>
-                                <RefreshCw className="h-3 w-3" /> Resend
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => invite.token && handleCopyEmailInvite(invite.id, invite.token)}>
+                                  {showCopied === invite.id ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleResendInvite(invite.id)}>
+                                  <RefreshCw className="h-3 w-3" /> Resend
+                                </Button>
+                              </div>
                             )}
                           </TableCell>
                         </TableRow>

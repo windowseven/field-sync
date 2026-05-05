@@ -49,6 +49,8 @@ export default function TeamLeaderMapPage() {
       } catch (err) {
         setError('Failed to load map data')
         console.error(err)
+      } finally {
+        setIsLoading(false)
       }
     }
     fetchData()

@@ -77,11 +77,22 @@ export default function SupervisorNotificationsPage() {
   const unread = notifs.filter(n => n.unread)
   const filtered = filter === 'all' ? notifs : filter === 'unread' ? notifs.filter(n => n.unread) : notifs.filter(n => n.type === filter)
 
-  function markAllRead() {
+  async function markAllRead() {
+    try {
+      await notificationService.markAllAsRead()
+      setNotifs(prev => prev.map(n => ({ ...n, unread: false })))
+    } catch (error) {
+      console.error('Failed to mark all as read:', error)
+    }
   }
 
-  function markRead(id: string) {
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n))
+  async function markRead(id: string) {
+    try {
+      await notificationService.markAsRead(id)
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n))
+    } catch (error) {
+      console.error('Failed to mark as read:', error)
+    }
   }
 
   function dismiss(id: string) {

@@ -17,6 +17,7 @@ export interface ApiPendingInvite {
   email: string;
   role: 'team_leader' | 'field_user';
   team: string;
+  token?: string;
   sent_at: string;
   status: 'pending' | 'accepted' | 'expired';
 }
@@ -24,6 +25,7 @@ export interface ApiPendingInvite {
 export interface CreateInviteLinkParams {
   role: 'team_leader' | 'field_user';
   team: string;
+  projectId?: string;
   maxUses: number;
   expiresInDays: number;
 }
@@ -32,16 +34,19 @@ export interface SendEmailInviteParams {
   email: string;
   role: 'team_leader' | 'field_user';
   team: string;
+  projectId?: string;
 }
 
 export const invitationService = {
-  async getInviteLinks(): Promise<ApiInviteLink[]> {
-    const response = await http.get<any>('/invitations/links');
+  async getInviteLinks(projectId?: string): Promise<ApiInviteLink[]> {
+    const path = projectId ? `/invitations/links?project_id=${projectId}` : '/invitations/links';
+    const response = await http.get<any>(path);
     return response?.data?.links ?? response?.data?.data?.links ?? [];
   },
 
-  async getEmailInvites(): Promise<ApiPendingInvite[]> {
-    const response = await http.get<any>('/invitations/emails');
+  async getEmailInvites(projectId?: string): Promise<ApiPendingInvite[]> {
+    const path = projectId ? `/invitations/emails?project_id=${projectId}` : '/invitations/emails';
+    const response = await http.get<any>(path);
     return response?.data?.invites ?? response?.data?.data?.invites ?? [];
   },
 
@@ -49,6 +54,7 @@ export const invitationService = {
     const response = await http.post<any>('/invitations/links', {
       role: params.role,
       team_id: params.team,
+      project_id: params.projectId,
       max_uses: params.maxUses,
       expires_in_days: params.expiresInDays,
     });
@@ -60,17 +66,18 @@ export const invitationService = {
       email: params.email,
       role: params.role,
       team_id: params.team,
+      project_id: params.projectId,
     });
     return response?.data?.invite ?? response?.data?.data?.invite;
   },
 
-  async resendEmailInvite(id: string): Promise<boolean> {
+  async resendEmailInvite(id: string): Promise<ApiPendingInvite | null> {
     try {
-      await http.post<any>(`/invitations/emails/${id}/resend`);
-      return true;
+      const response = await http.post<any>(`/invitations/emails/${id}/resend`);
+      return response?.data?.invite ?? response?.data?.data?.invite ?? null;
     } catch (err) {
       console.error('Failed to resend invite:', err);
-      return false;
+      return null;
     }
   },
 
@@ -99,6 +106,28 @@ export const invitationService = {
     return response?.data?.link ?? response?.data?.data?.link;
   },
 
+  async validateInviteCode(code: string) {
+    try {
+      const res = await fetch(`/api/invitations/validate/${code}`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.data ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  async validateEmailInvite(token: string) {
+    try {
+      const res = await fetch(`/api/invitations/email/validate/${token}`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.data ?? null;
+    } catch {
+      return null;
+    }
+  },
+
   transformInviteLink(link: ApiInviteLink) {
     return {
       id: link.id,
@@ -119,6 +148,7 @@ export const invitationService = {
       email: invite.email,
       role: invite.role,
       team: invite.team,
+      token: invite.token,
       sentAt: invite.sent_at ? getRelativeTime(invite.sent_at) : '',
       status: invite.status,
     };

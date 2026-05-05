@@ -43,6 +43,7 @@ interface PendingInvite {
   email: string
   role: 'team_leader' | 'field_user'
   team: string
+  token?: string
   sentAt: string
   status: 'pending' | 'accepted' | 'expired'
 }
@@ -56,6 +57,7 @@ const statusConfig = {
 }
 
 export default function InvitationsPage() {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const [showCopied, setShowCopied] = React.useState<string | null>(null)
   const [showLink, setShowLink] = React.useState<string | null>(null)
   const [newRole, setNewRole] = React.useState('field_user')
@@ -75,7 +77,14 @@ export default function InvitationsPage() {
   const [inviteTeam, setInviteTeam] = React.useState('')
 
   const handleCopy = (code: string) => {
+    navigator.clipboard.writeText(`${origin}/join/${code}`)
     setShowCopied(code)
+    setTimeout(() => setShowCopied(null), 2000)
+  }
+
+  const handleCopyEmailInvite = (id: string, token: string) => {
+    navigator.clipboard.writeText(`${origin}/join/${token}`)
+    setShowCopied(id)
     setTimeout(() => setShowCopied(null), 2000)
   }
 
@@ -160,7 +169,10 @@ export default function InvitationsPage() {
   }
 
   const handleResendInvite = async (id: string) => {
-    await invitationService.resendEmailInvite(id)
+    const response = await invitationService.resendEmailInvite(id)
+    if (response) {
+      setPendingInvites(prev => prev.map(i => i.id === id ? invitationService.transformEmailInvite(response) : i))
+    }
   }
 
   const handleRegenerateLink = async (id: string) => {
@@ -332,7 +344,7 @@ export default function InvitationsPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-mono text-sm font-medium">
-                                  {showLink === link.id ? `fieldsync.io/join/${link.code}` : `fieldsync.io/join/••••••••`}
+                                  {showLink === link.id ? `${origin}/join/${link.code}` : `${origin}/join/••••••••`}
                                 </span>
                                 <Badge variant="secondary" className={statusConfig[link.status].className}>{statusConfig[link.status].label}</Badge>
                               </div>
@@ -464,9 +476,14 @@ export default function InvitationsPage() {
                           </TableCell>
                           <TableCell>
                             {invite.status === 'pending' && (
-                              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleResendInvite(invite.id)}>
-                                <RefreshCw className="h-3 w-3" /> Resend
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => invite.token && handleCopyEmailInvite(invite.id, invite.token)}>
+                                  {showCopied === invite.id ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleResendInvite(invite.id)}>
+                                  <RefreshCw className="h-3 w-3" /> Resend
+                                </Button>
+                              </div>
                             )}
                           </TableCell>
                         </TableRow>

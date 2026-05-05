@@ -70,8 +70,8 @@ function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-[oklch(0.7_0.18_160)] flex items-center justify-center shadow-lg shadow-[oklch(0.7_0.18_160)/30] group-hover:shadow-[oklch(0.7_0.18_160)/50] transition-shadow">
-            <ShieldCheck className="w-4 h-4 text-[oklch(0.10_0_0)]" />
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/30 group-hover:shadow-emerald-500/50 transition-shadow overflow-hidden">
+            <img src="/logo.svg" alt="FieldSync" className="w-7 h-7" />
           </div>
           <span className="font-bold text-lg text-white tracking-tight">FieldSync</span>
         </Link>
@@ -126,8 +126,8 @@ function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
           <div className="lg:col-span-2 space-y-4">
             <Link href="/" className="flex items-center gap-2.5 w-fit">
-              <div className="w-8 h-8 rounded-lg bg-[oklch(0.7_0.18_160)] flex items-center justify-center shadow-lg shadow-[oklch(0.7_0.18_160)/30]">
-                <ShieldCheck className="w-4 h-4 text-[oklch(0.10_0_0)]" />
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/30 overflow-hidden">
+                <img src="/logo.svg" alt="FieldSync" className="w-7 h-7" />
               </div>
               <span className="font-bold text-lg text-white tracking-tight">FieldSync</span>
             </Link>

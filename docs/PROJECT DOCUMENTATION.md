@@ -39,6 +39,7 @@ The platform provides:
 - Audit logging and security monitoring
 - Offline sync support for unstable network environments
 - System maintenance, observability, and recovery tooling
+- Company/information pages (About, Careers, Contact, Blog, FAQ, Privacy, Terms, Cookies)
 
 Role model:
 
@@ -51,20 +52,12 @@ This architecture allows the platform to scale as a real product instead of beha
 
 2A. Implementation Strategy and Delivery Phases
 
-FieldSync is planned as a full end-to-end platform, but development is intentionally staged.
-
-The implementation strategy is:
-
-- Build the frontend in role-based phases
-- Complete the major user-facing surfaces first
-- Begin backend implementation after the core frontend experience is fully mapped across all intended roles
-
-Planned frontend phases:
+FieldSync is planned as a full end-to-end platform, and development has been staged across frontend, backend, and public-facing pages.
 
 Phase 1: Admin Dashboard
 
 - Focus: system-level control plane
-- Status: **Complete**✅
+- Status: **Complete** ✅
 - Includes system overview, users, supervisors, projects, analytics, audit, security, alerts, settings, emergency controls, and maintenance modules
 
 Phase 2: Supervisor Frontend
@@ -84,28 +77,34 @@ Phase 3: Team Leader Frontend
 Phase 4: Field Worker Frontend
 
 - Focus: field execution and data capture
-- Status: planned
-- Expected scope includes task participation, live tracking, form submission, requests, and offline-capable workflows
+- Status: **Complete** ✅
+- Scope implemented: home dashboard, map, tasks, forms with step-by-step submission, team view, notifications, offline sync status (accessible via /user/*)
 
 Phase 5: Backend Implementation
 
 - Focus: services, persistence, APIs, auth flows, real-time infrastructure, sync logic, and production data workflows
-- Status: pending
-- Begins after the major frontend role surfaces are completed
+- Status: **Complete** ✅
+- Implemented: Node.js/Express REST API, MySQL database, JWT authentication, WebSocket real-time updates, email notifications (nodemailer), audit logging, role-based middleware, database migration system, contact inquiry management, field issue tracking, team messaging
+
+Phase 6: Public/Company Pages
+
+- Focus: marketing, information, and legal pages
+- Status: **Complete** ✅
+- Implemented: Landing page, About, Careers, Contact (with form submission + email), Blog, FAQ, Privacy Policy, Terms of Service, Cookie Policy
 
 Current project milestone:
 
-- Admin Dashboard ✅, Supervisor Dashboard ✅, Team Leader Dashboard ✅ are complete frontend milestones of the broader FieldSync platform.
-- Field Worker frontend remains upcoming phase.
-- Backend implementation next after Field Worker frontend.
+- All four role frontends ✅, Backend API ✅, Company pages ✅ are complete.
+- Next: production deployment, field testing, and iterative improvements.
 
 3. How the System Works
 
 Step 1: Authentication
 
-- Users register and verify accounts using email and/or OTP
+- Users register and verify accounts using email and OTP
 - Login is required to access platform resources
 - Roles are assigned according to system rules and project membership
+- JWT tokens with refresh token support for session management
 
 Step 2: Profile Setup
 
@@ -145,8 +144,6 @@ Supervisor flow is defined in two layers:
 - **Supervisor Workspace**: project list, create project, switch project, cross-project notifications, personal settings.
 - **Project Dashboard**: project-specific overview, teams, zones, forms, tasks, project users, invitations, analytics, audit logs, and project settings.
 
-This ensures all operational actions are explicitly tied to a selected project context.
-
 Step 5: Team Leader Operations
 
 Team Leaders coordinate field execution inside assigned projects.
@@ -158,6 +155,7 @@ Team Leader responsibilities include:
 - Assigning a member to submit on behalf of a group when needed
 - Monitoring team movement, progress, and submissions
 - Coordinating with other leaders and responding to field issues
+- Handling field issues (redirect, pause, resume)
 
 Step 6: Field Execution
 
@@ -170,10 +168,11 @@ Field Worker responsibilities include:
 - Viewing teammates and relevant map context
 - Filling dynamic forms step by step
 - Saving drafts and submitting collected data
+- Working offline with automatic sync when connectivity returns
 
 Step 7: Live Tracking and Map Interaction
 
-- The platform receives location updates periodically
+- The platform receives location updates periodically via WebSocket
 - Maps visualize users, teams, routes, and zones
 - Teams can detect overlap, nearby teammates, and coverage gaps
 - Historical movement and active coverage can be reviewed
@@ -184,6 +183,7 @@ Step 8: Team Interaction and Notifications
 - Team leaders can coordinate across teams when permitted
 - The platform delivers assignment notifications, in-app alerts, and broadcasts
 - Admin can send system-wide announcements and maintenance notices
+- Email notifications for key events (contact inquiries, account events)
 
 Step 9: Data Collection, Review, and Analytics
 
@@ -197,6 +197,7 @@ Step 10: Audit, Security, and Maintenance
 - Important actions are logged with actor, action, target, and timestamp
 - Security events such as suspicious logins or abuse attempts are monitored
 - Backup, restore, storage, API health, error tracking, feature control, and offline sync monitoring support production stability
+- CSRF protection, token refresh, inactivity timeout, and route guards enforce security
 
 4. System Modules
 
@@ -227,6 +228,9 @@ Step 10: Audit, Security, and Maintenance
 25. Offline Sync Module
 26. Feature Flags and Rollout Module
 27. Sandbox and Testing Module
+28. Contact Inquiry Module (public contact form + admin management)
+29. Field Issue Module (issue reporting, response, resolution)
+30. Public Pages Module (Landing, About, Careers, Blog, FAQ, Legal)
 
 5. System Users and Roles
 
@@ -251,6 +255,7 @@ Team Leader
 - Assigns tasks and coordinates execution
 - Monitors progress, movement, and submissions
 - Communicates with supervisors and other leaders where needed
+- Handles field issues and redirects
 
 Field Worker
 
@@ -258,6 +263,7 @@ Field Worker
 - Fills forms and submits data
 - Shares location where enabled
 - Participates in requests, coordination, and assigned workflows
+- Works offline with automatic sync
 
 6. Security and Reliability Considerations
 
@@ -265,20 +271,20 @@ Authentication and Access
 
 - Email and OTP verification
 - Strong password policies
-- Secure session and token handling
-- Role-Based Access Control
+- JWT tokens with refresh token rotation
+- Role-Based Access Control (RBAC) on both frontend and backend
 
 Data Protection
 
 - HTTPS for all communications
 - Secure storage of sensitive data
 - Environment-based secret management
-- Input validation and sanitization
+- Input validation and sanitization (DOMPurify, Zod)
 
 Location and Real-Time Security
 
 - Controlled location visibility
-- Authenticated real-time channels
+- Authenticated WebSocket channels
 - Secure WebSocket communication
 - Presence and session monitoring
 
@@ -294,6 +300,7 @@ Abuse Prevention
 - Rate limiting and request control
 - Account suspension and force logout support
 - Failed login tracking and brute-force detection
+- CSRF token validation on mutations
 
 Resilience and Production Readiness
 
@@ -302,6 +309,8 @@ Resilience and Production Readiness
 - Offline sync monitoring and conflict handling
 - Feature flags and staged rollout control
 - Sandbox/testing isolation for safe validation
+- Email notifications for critical events
+- Database migration system for schema management
 
 7. Conclusion
 
@@ -318,5 +327,8 @@ It combines:
 - Auditability
 - Security
 - Maintenance tooling
+- Offline-first workflows
+- Email notifications
+- Public information pages
 
 into one unified system that supports scalable and accountable field operations.

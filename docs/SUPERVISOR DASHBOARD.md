@@ -296,13 +296,14 @@ These rules should guide implementation:
 
 ## Recommended Implementation Direction
 
-Status: **Implemented** ✅
+Status: **Complete** ✅
 
 1. [x] Introduce the Supervisor Workspace as the new entry point
 2. [x] Move all operational pages under `/supervisor/projects/[projectId]/...`
 3. [x] Add a project switcher
 4. [x] Separate personal settings from project settings
 5. [x] Update data structures and docs to use project memberships
+6. [x] Backend API integration for project operations
 
 ## Final Architecture Summary
 

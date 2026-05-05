@@ -6,6 +6,8 @@ Authorization = What are you allowed to do
 You already designed authentication pages ✅
 Now we define authorization layer on top of that
 
+Status: **Implemented** ✅ — RBAC on both frontend and backend, route guards, role-based UI rendering, JWT token handling, CSRF protection.
+
 🧩 WHAT WE NEED (FULL STRUCTURE)
 1️⃣ Role-Based Access Control (RBAC)
 
