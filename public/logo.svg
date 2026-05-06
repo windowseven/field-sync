@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="pinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#2dd4bf"/>
+    </linearGradient>
+  </defs>
+  <!-- Map Pin Body -->
+  <path d="M60 15 C36 15, 20 32, 20 52 C20 78, 60 105, 60 105 C60 105, 100 78, 100 52 C100 32, 84 15, 60 15 Z" fill="url(#pinGrad)"/>
+  <!-- Inner Circle -->
+  <circle cx="60" cy="48" r="20" fill="white" fill-opacity="0.15"/>
+  <!-- Sync Arrow Top -->
+  <path d="M48 42 C48 35, 60 30, 68 35 C74 39, 74 47, 70 52" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Sync Arrow Top Head -->
+  <polyline points="64,46 70,52 74,46" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Sync Arrow Bottom -->
+  <path d="M72 54 C72 61, 60 66, 52 61 C46 57, 46 49, 50 44" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Sync Arrow Bottom Head -->
+  <polyline points="56,50 50,44 46,50" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

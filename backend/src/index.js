@@ -18,15 +18,14 @@ const startServer = async () => {
     if (isProduction) {
       logger.info('🖥️  Starting Next.js Frontend (Production)...');
       const next = (await import('next')).default;
-      const nextApp = next({ dev: false, dir: '../frontend' });
+      // The frontend is in the parent directory relative to backend/src
+      const nextApp = next({ dev: false, dir: '../' });
       const handle = nextApp.getRequestHandler();
       await nextApp.prepare();
 
       const { app: expressApp } = await import('./app.js');
       
       // Mount Next.js handler *after* API routes but *before* 404s
-      // Note: This requires the Next.js build to be in ../frontend/.next
-      // In a Render build step, we ensure this happens.
       expressApp.all('*', (req, res) => {
         if (req.originalUrl.startsWith('/api/v1')) return next();
         return handle(req, res);
