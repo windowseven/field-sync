@@ -1,6 +1,13 @@
 import { httpServer } from './app.js';
 import { initializeDatabase } from './db/init.js';
+import { runMigration } from './db/migrate-indexes.js';
 import logger from './utils/logger.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDir = path.resolve(__dirname, '../..');
 
 const PORT = process.env.PORT || 5000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -14,12 +21,15 @@ const startServer = async () => {
     await initializeDatabase({ allowDestructive: allowDestructiveInit });
     logger.info('Database initialized successfully.');
 
+    logger.info('Running database index migration...');
+    await runMigration();
+    logger.info('Database index migration complete.');
+
     // 2. Start Next.js Frontend (Only in Production)
     if (isProduction) {
       logger.info('🖥️  Starting Next.js Frontend (Production)...');
       const nextServer = (await import('next')).default;
-      // The frontend is in the parent directory relative to backend/src
-      const nextApp = nextServer({ dev: false, dir: '../' });
+      const nextApp = nextServer({ dev: false, dir: frontendDir });
       const handle = nextApp.getRequestHandler();
       await nextApp.prepare();
 

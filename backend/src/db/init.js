@@ -27,11 +27,15 @@ export const initializeDatabase = async ({ allowDestructive = false } = {}) => {
       .map(q => q.trim())
       .filter(q => q.length > 0);
 
+    const tableQueries = queries.filter(query => /^CREATE\s+TABLE\b/i.test(query));
+    const remainingQueries = queries.filter(query => !/^CREATE\s+TABLE\b/i.test(query));
+    const orderedQueries = [...tableQueries, ...remainingQueries];
+
     const connection = await pool.getConnection();
     
     logger.info('🚀 Starting database initialization...');
 
-    for (const query of queries) {
+    for (const query of orderedQueries) {
       try {
         await connection.query(query);
       } catch (err) {
