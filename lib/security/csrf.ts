@@ -4,6 +4,7 @@
 // ============================================================
 
 import { STORAGE_KEYS } from "@/types/auth.types";
+import { getApiBaseUrl } from "@/lib/config/endpoints";
 
 // ─── CSRF Token Manager ──────────────────────────────────────
 // When using HTTP-only cookies for auth, CSRF protection is critical.
@@ -65,7 +66,7 @@ export const csrfManager = {
 // ─── Fetch CSRF token from backend on mount ───────────────────
 // Call this once in your app root (e.g. in AuthProvider or layout)
 export async function initializeCsrf(): Promise<void> {
-  const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const BASE_URL = getApiBaseUrl();
   
   try {
     const res = await fetch(`${BASE_URL}/auth/csrf`, {

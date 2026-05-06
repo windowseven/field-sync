@@ -11,8 +11,9 @@
 
 import { tokenManager } from "@/lib/auth/tokenManager";
 import { csrfManager } from "@/lib/security/csrf";
+import { getApiBaseUrl } from "@/lib/config/endpoints";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const BASE_URL = getApiBaseUrl();
 
 // Security: Enforce HTTPS in production
 if (

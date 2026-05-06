@@ -5,6 +5,7 @@
 // ============================================================
 
 import { tokenManager } from "@/lib/auth/tokenManager";
+import { getWsBaseUrl } from "@/lib/config/endpoints";
 
 type SocketEvent = string;
 type SocketHandler = (data: unknown) => void;
@@ -17,7 +18,7 @@ interface SocketOptions {
   onDisconnected?: () => void;
 }
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? (process.env.NODE_ENV === 'production' ? 'wss://api.fieldsync.com' : 'ws://localhost:5000');
+const WS_BASE = getWsBaseUrl();
 
 // ─── FieldSync Socket Manager ────────────────────────────────
 class FieldSyncSocket {

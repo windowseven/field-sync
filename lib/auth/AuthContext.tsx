@@ -31,6 +31,7 @@ import { tokenManager, activityTracker } from "./tokenManager";
 import { sessionManager } from "./sessionManager";
 import { hasPermission, hasAnyPermission, hasAllPermissions } from "./permissions";
 import { fieldSyncSocket } from "./socketManager";
+import { getApiBaseUrl } from "@/lib/config/endpoints";
 
 // ─── Initial State ────────────────────────────────────────────
 const initialState: AuthState = {
@@ -153,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "TOKEN_REFRESHING" });
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: "AUTH_LOADING" });
 
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+        const baseUrl = getApiBaseUrl();
         devLog("[Auth] Fetching from:", `${baseUrl}/auth/login`);
         const res = await fetch(`${baseUrl}/auth/login`, {
           method: "POST",

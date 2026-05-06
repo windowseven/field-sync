@@ -1,4 +1,6 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+import { getApiBaseUrl } from "@/lib/config/endpoints";
+
+const BASE_URL = getApiBaseUrl();
 
 export interface ContactFormData {
   name: string;

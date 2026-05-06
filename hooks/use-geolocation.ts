@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { tokenManager } from '@/lib/auth/tokenManager'
+import { getWsBaseUrl } from '@/lib/config/endpoints'
 
 type GeolocationState = {
   lat: number | null
@@ -80,7 +81,7 @@ export function useWsLocationBroadcast(lat: number | null, lng: number | null, a
     const token = tokenManager.getToken()
     if (!token) return
 
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/ws?token=${token}`
+    const url = `${getWsBaseUrl()}/ws?token=${encodeURIComponent(token)}`
     const ws = new WebSocket(url)
 
     ws.onopen = () => {
