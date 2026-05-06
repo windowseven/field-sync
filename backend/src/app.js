@@ -55,6 +55,10 @@ const securityPolicies = getSecurityPolicies();
 const app = express();
 const httpServer = createServer(app);
 
+// Render terminates TLS and forwards requests to the Node process.
+// Trust the first proxy so req.ip and express-rate-limit use X-Forwarded-For correctly.
+app.set('trust proxy', 1);
+
 // Raw WebSocket server (used by frontend socketManager.ts)
 setupWsServer(httpServer);
 
