@@ -3,9 +3,11 @@ import { http } from './httpClient';
 export interface ApiNotification {
   id: string;
   user_id: string;
-  type: 'task' | 'form' | 'message' | 'alert' | 'system';
+  type: 'task' | 'form' | 'message' | 'alert' | 'system' | 'announcement';
   title: string;
   message: string;
+  body?: string;
+  sender_name?: string;
   status?: 'unread' | 'read';
   is_read?: boolean;
   action_url?: string;

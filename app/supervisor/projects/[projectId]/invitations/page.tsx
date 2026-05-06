@@ -59,6 +59,8 @@ const statusConfig = {
   accepted: { label: 'Accepted', className: 'bg-emerald-500/10 text-emerald-500' },
 }
 
+type InvitationStatus = keyof typeof statusConfig
+
 export default function InvitationsPage() {
   const router = useRouter()
   const params = useParams()
@@ -77,6 +79,10 @@ export default function InvitationsPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('field_user')
   const [inviteTeam, setInviteTeam] = useState('')
+  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([])
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const handleCopy = (code: string) => {
     navigator.clipboard.writeText(`${origin}/join/${code}`)

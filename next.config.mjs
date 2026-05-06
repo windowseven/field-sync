@@ -7,6 +7,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const nextConfig = {
   output: 'standalone',
   outputFileTracingRoot: __dirname,
+  turbopack: {
+    root: __dirname,
+  },
   images: {
     unoptimized: true,
     qualities: [75, 90],

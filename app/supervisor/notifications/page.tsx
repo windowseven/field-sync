@@ -59,7 +59,7 @@ export default function SupervisorNotificationsPage() {
           id: n.id,
           type: (n.type || 'info') as string,
           title: n.title,
-          description: n.body,
+          description: n.body ?? n.message ?? '',
           from: n.sender_name || 'System',
           time: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           unread: !n.is_read,

@@ -84,7 +84,7 @@ export default function TeamMembersPage() {
           tasksCompleted: 0,
           formsSubmitted: 0,
           accuracy: member.accuracy,
-          locationUpdatedAt: member.location_updated_at,
+          locationUpdatedAt: member.location_updated_at ?? undefined,
         }
       })
 

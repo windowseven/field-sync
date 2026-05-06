@@ -5,6 +5,7 @@ export type MapUser = {
   name?: string
   email?: string
   role: string
+  team?: string
   status?: string
   lat: number
   lng: number

@@ -100,7 +100,7 @@ export default function SupervisorFormsPage() {
           zone: f.zone_name || 'All Zones',
           submissions: f.submissions_count || 0,
           target: f.target_count || 100,
-          status: f.status === 'published' ? 'active' : 'draft',
+          status: f.status === 'published' ? 'active' : 'paused',
           mode: 'individual',
           createdAt: new Date(f.created_at).toLocaleDateString(),
         })))

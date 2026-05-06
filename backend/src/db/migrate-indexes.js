@@ -6,8 +6,8 @@ const INDEXES = [
   'ALTER TABLE users ADD COLUMN team VARCHAR(255) NULL',
   'ALTER TABLE invite_links ADD COLUMN project_id VARCHAR(36) NULL',
   'ALTER TABLE email_invites ADD COLUMN project_id VARCHAR(36) NULL',
-  'CREATE INDEX IF NOT EXISTS idx_invite_links_project ON invite_links(project_id)',
-  'CREATE INDEX IF NOT EXISTS idx_email_invites_project ON email_invites(project_id)',
+  'CREATE INDEX idx_invite_links_project ON invite_links(project_id)',
+  'CREATE INDEX idx_email_invites_project ON email_invites(project_id)',
   'ALTER TABLE teams ADD COLUMN session_started_at TIMESTAMP NULL',
   `CREATE TABLE IF NOT EXISTS user_location_history (
     id VARCHAR(36) PRIMARY KEY,

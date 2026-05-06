@@ -55,9 +55,9 @@ export default function NewProjectPage() {
         name: formData.name,
         description: formData.description,
         location: formData.location,
-        startDate: formData.startDate,
+        start_date: formData.startDate,
         deadline: formData.deadline,
-        targetSubmissions: parseInt(formData.submissionGoal) || 0,
+        target_submissions: parseInt(formData.submissionGoal) || 0,
       })
       router.push(`/supervisor/projects/${project.id}`)
     } catch (err) {

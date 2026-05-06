@@ -45,6 +45,7 @@ export default function UserNotificationsPage() {
         user_id: '',
         type: data.type === 'alert' ? 'alert' : 'announcement',
         title: data.title,
+        message: data.message,
         body: data.message,
         is_read: false,
         action_url: '/user/home',

@@ -18,7 +18,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { auditService, type AuditEntry as ApiAuditEntry } from '@/lib/api/auditService'
+import { auditService, type ApiAuditLog } from '@/lib/api/auditService'
 
 type ActionCategory = 'user' | 'team' | 'zone' | 'form' | 'task' | 'project' | 'security' | 'auth' | 'system'
 
@@ -42,6 +42,21 @@ const categoryConfig: Record<ActionCategory, { icon: React.ElementType; color: s
   task: { icon: CheckCircle2, color: 'text-chart-4', bg: 'bg-chart-4/10', label: 'Task' },
   project: { icon: Settings, color: 'text-muted-foreground', bg: 'bg-muted', label: 'Project' },
   security: { icon: Shield, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Security' },
+  auth: { icon: Shield, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Auth' },
+  system: { icon: Settings, color: 'text-muted-foreground', bg: 'bg-muted', label: 'System' },
+}
+
+function inferActionCategory(log: ApiAuditLog): ActionCategory {
+  const action = log.action.toLowerCase()
+  if (action.includes('auth') || action.includes('login')) return 'auth'
+  if (action.includes('user') || action.includes('member')) return 'user'
+  if (action.includes('team')) return 'team'
+  if (action.includes('zone')) return 'zone'
+  if (action.includes('form')) return 'form'
+  if (action.includes('task')) return 'task'
+  if (action.includes('project')) return 'project'
+  if (action.includes('security') || action.includes('policy')) return 'security'
+  return 'system'
 }
 
 export default function SupervisorAuditPage() {
@@ -55,17 +70,17 @@ export default function SupervisorAuditPage() {
     const fetchAuditLogs = async () => {
       try {
         setLoading(true)
-        const logs = await auditService.getAll({ limit: 100 })
-        const transformed = logs.map((log: ApiAuditEntry) => ({
-          id: log.id,
+        const logs = await auditService.getAll(100)
+        const transformed = logs.map((log: ApiAuditLog) => ({
+          id: log.id.toString(),
           actor: log.user_name || 'System',
           actorRole: log.user_role || 'Unknown',
           action: log.action,
           target: log.target_name || log.target_type || 'N/A',
-          category: (log.category || 'system') as ActionCategory,
+          category: inferActionCategory(log),
           timestamp: new Date(log.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          ip: log.ip_address,
-          detail: log.detail,
+          ip: log.ip_address ?? undefined,
+          detail: log.detail ?? undefined,
         }))
         setEntries(transformed)
       } catch (error) {

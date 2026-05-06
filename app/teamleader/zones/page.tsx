@@ -58,7 +58,7 @@ export default function SubZoneAllocationPage() {
         teamService.getMyTeamMembers(),
       ])
       setProjects(projectsData)
-      setMembers(teamData?.data?.members ?? teamData?.members ?? [])
+      setMembers(teamData?.members ?? [])
 
       const activeProject = projectsData.find(p => p.status === 'active') || projectsData[0]
       if (activeProject) {

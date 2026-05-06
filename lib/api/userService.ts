@@ -11,6 +11,7 @@ export interface ApiUser {
   status: 'online' | 'offline' | 'idle';
   location_sharing_enabled?: boolean;
   notifications_enabled?: boolean;
+  assigned_zone?: string | null;
   last_seen?: string;
   created_at?: string;
 }

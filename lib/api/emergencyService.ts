@@ -44,7 +44,7 @@ export const emergencyService = {
     return response.data;
   },
 
-  async updateControl(controlKey: string, enabled: boolean, reason?: string): Promise<EmergencySnapshot> {
+  async updateControl(controlKey: string, enabled: boolean, reason?: string): Promise<EmergencyControlState> {
     const response = await http.post<any>('/emergency/control', {
       controlKey,
       enabled,

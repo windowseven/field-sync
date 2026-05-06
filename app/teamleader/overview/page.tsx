@@ -53,8 +53,8 @@ export default function TeamLeaderOverview() {
       setLoading(true)
       setNoTeam(false)
       const [statsRes, breachesRes] = await Promise.all([
-        http.get('/team/stats'),
-        http.get('/team/zone-breaches').catch(() => null),
+        http.get<any>('/team/stats'),
+        http.get<any>('/team/zone-breaches').catch(() => null),
       ])
 
       if (statsRes.status === 'success') {
@@ -111,7 +111,7 @@ export default function TeamLeaderOverview() {
 
   const handleStartSession = async () => {
     try {
-      const res = await http.post('/team/session', { action: 'start' })
+      const res = await http.post<any>('/team/session', { action: 'start' })
       if (res.status === 'success') {
         setSessionActive(true)
         setSessionStartedAt(new Date().toISOString())
@@ -124,7 +124,7 @@ export default function TeamLeaderOverview() {
 
   const handleEndSession = async () => {
     try {
-      const res = await http.post('/team/session', { action: 'end' })
+      const res = await http.post<any>('/team/session', { action: 'end' })
       if (res.status === 'success') {
         setSessionActive(false)
         setSessionStartedAt(null)

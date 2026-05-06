@@ -23,7 +23,7 @@ interface AuditTableLog {
   action: string
   target: string
   ip: string
-  severity: 'info' | 'warning' | 'critical'
+  severity: 'info' | 'warning' | 'error' | 'critical'
 }
 
 const severityConfig: Record<string, { className: string; icon: React.ElementType }> = {
@@ -103,7 +103,7 @@ export default function AuditPage() {
   const allLogs = useMemo<AuditTableLog[]>(() => {
     if (!rawLogs) return []
     return rawLogs.map(log => {
-      let severityMapped = 'info'
+      let severityMapped: AuditTableLog['severity'] = 'info'
       const infer = auditService.inferSeverity(log.action)
       if (infer === 'medium') severityMapped = 'warning'
       if (infer === 'high') severityMapped = 'critical'

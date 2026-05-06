@@ -47,7 +47,7 @@ function transformApiNotification(apiNotif: ApiNotification): Notification {
     id: apiNotif.id,
     type: mappedType,
     title: apiNotif.title,
-    message: apiNotif.body,
+    message: apiNotif.body ?? apiNotif.message ?? '',
     timestamp: formatRelativeTime(apiNotif.created_at),
     sender: apiNotif.user_id || 'System',
     status: apiNotif.is_read ? 'read' : 'unread',

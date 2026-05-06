@@ -3,6 +3,7 @@ import { ApiUser } from './userService';
 
 export interface ApiTeamMember extends ApiUser {
   team_id?: string;
+  team_project_id?: string;
   lat?: number | null;
   lng?: number | null;
   accuracy?: number | null;
@@ -66,7 +67,7 @@ export const teamService = {
 
   async getMyTeamMembers(): Promise<ApiMyTeamInfo | null> {
     const response = await http.get<any>('/team/my/members');
-    return response?.data ?? response?.data?.data ?? null;
+    return response?.data?.team || response?.data?.members ? response.data : response?.data?.data ?? null;
   },
 
   async getStats(): Promise<ApiTeamStats> {
