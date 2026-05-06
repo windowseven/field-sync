@@ -18,7 +18,8 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 if (
   typeof window !== "undefined" &&
   process.env.NODE_ENV === "production" &&
-  window.location.protocol !== "https:"
+  window.location.protocol !== "https:" &&
+  !["localhost", "127.0.0.1"].includes(window.location.hostname)
 ) {
   console.error("[Security] HTTP is not allowed. Redirecting to HTTPS.");
   window.location.href = window.location.href.replace("http:", "https:");

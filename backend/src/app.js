@@ -64,7 +64,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
       connectSrc: ["'self'",
         process.env.NODE_ENV === 'production'
           ? `wss://${new URL(FRONTEND_URL).hostname}`
