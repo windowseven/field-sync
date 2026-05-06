@@ -192,6 +192,7 @@ export default function VerifyOtpPage() {
           onChange={setOtp}
           disabled={isLoading || success}
           className="gap-2"
+          aria-label="Six digit verification code"
         >
           <InputOTPGroup>
             <InputOTPSlot

@@ -218,10 +218,11 @@ export default function JoinPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground/80">Full name <span className="text-destructive">*</span></label>
+            <label htmlFor="join-name" className="text-xs font-medium text-foreground/80">Full name <span className="text-destructive">*</span></label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
+                id="join-name"
                 ref={nameRef}
                 type="text"
                 value={name}
@@ -236,10 +237,11 @@ export default function JoinPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground/80">Email address <span className="text-destructive">*</span></label>
+            <label htmlFor="join-email" className="text-xs font-medium text-foreground/80">Email address <span className="text-destructive">*</span></label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
+                id="join-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -254,10 +256,11 @@ export default function JoinPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground/80">Password <span className="text-destructive">*</span></label>
+            <label htmlFor="join-password" className="text-xs font-medium text-foreground/80">Password <span className="text-destructive">*</span></label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
+                id="join-password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -266,7 +269,7 @@ export default function JoinPage() {
                 className={cn('w-full rounded-md border bg-transparent px-3 py-2 pr-10 outline-none transition-all', fieldClass(password, passwordError ?? undefined))}
                 disabled={isProcessing || success}
               />
-              <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" tabIndex={-1}>
+              <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" aria-label={showPassword ? 'Hide password' : 'Show password'} tabIndex={-1}>
                 {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -291,10 +294,11 @@ export default function JoinPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground/80">Confirm password <span className="text-destructive">*</span></label>
+            <label htmlFor="join-confirm-password" className="text-xs font-medium text-foreground/80">Confirm password <span className="text-destructive">*</span></label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
+                id="join-confirm-password"
                 type={showConfirm ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -303,7 +307,7 @@ export default function JoinPage() {
                 className={cn('w-full rounded-md border bg-transparent px-3 py-2 pr-10 outline-none transition-all', fieldClass(confirmPassword, confirmError ?? undefined), confirmPassword && !confirmError ? 'border-primary/40 focus-visible:ring-primary/20' : '')}
                 disabled={isProcessing || success}
               />
-              <button type="button" onClick={() => setShowConfirm((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" tabIndex={-1}>
+              <button type="button" onClick={() => setShowConfirm((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" aria-label={showConfirm ? 'Hide password' : 'Show password'} tabIndex={-1}>
                 {showConfirm ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
