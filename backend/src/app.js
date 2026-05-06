@@ -30,7 +30,26 @@ for (const key of REQUIRED_ENV) {
   }
 }
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const getFrontendUrl = () => {
+  const configuredUrl = process.env.FRONTEND_URL;
+
+  if (
+    configuredUrl &&
+    !(process.env.NODE_ENV === 'production' && configuredUrl.includes('localhost'))
+  ) {
+    return configuredUrl;
+  }
+
+  if (process.env.RENDER_EXTERNAL_HOSTNAME) {
+    return `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
+  }
+
+  return process.env.NODE_ENV === 'production'
+    ? 'https://field-sync.onrender.com'
+    : 'http://localhost:3000';
+};
+
+const FRONTEND_URL = getFrontendUrl();
 const securityPolicies = getSecurityPolicies();
 
 const app = express();
@@ -194,10 +213,6 @@ app.use((req, res, next) => {
 });
 
 // ─── Basic Routes ───────────────────────────────────────────
-app.get('/', (req, res) => {
-  res.redirect(FRONTEND_URL);
-});
-
 app.get('/health', async (req, res) => {
   try {
     await checkConnection();

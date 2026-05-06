@@ -31,6 +31,10 @@ services:
         generateValue: true
       - key: FRONTEND_URL
         value: https://field-sync.onrender.com
+      - key: NEXT_PUBLIC_API_URL
+        value: https://field-sync.onrender.com/api/v1
+      - key: NEXT_PUBLIC_WS_URL
+        value: wss://field-sync.onrender.com
       - key: EMAIL_USER
         sync: false
       - key: EMAIL_PASS
