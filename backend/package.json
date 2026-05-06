@@ -1,0 +1,35 @@
+{
+  "name": "field-sync-backend",
+  "version": "1.0.0",
+  "description": "Professional Backend for FieldSync Operations",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "npm run migrate-indexes && node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "seed": "node src/db/seed.js",
+    "migrate-indexes": "node src/db/migrate-indexes.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.9.7",
+    "next": "^14.2.0",
+    "nodemailer": "^8.0.5",
+    "socket.io": "^4.7.5",
+    "uuid": "^13.0.0",
+    "winston": "^3.13.0",
+    "ws": "^8.17.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0"
+  }
+}
