@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-node_modules/
-.env
-.env.local
-*.log
-.DS_Store
-Thumbs.db
-=======
 # Dependencies
 node_modules/
 .pnp
@@ -47,4 +39,3 @@ tsconfig.tsbuildinfo
 
 # Vercel
 .vercel
->>>>>>> 5d39e8afb23a42ad78c6ba37e974c849e7c6fcc4

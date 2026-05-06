@@ -28,14 +28,18 @@ function getRenderOrigin(): string | null {
 }
 
 export function getApiBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+  if (typeof window !== "undefined") {
+    if (isBrowserOnLocalhost()) {
+      return `${window.location.protocol}//${window.location.hostname}:5000${API_PATH}`;
+    }
 
-  if (configured && (!isLocalUrl(configured) || isBrowserOnLocalhost())) {
-    return configured;
+    return API_PATH;
   }
 
-  if (typeof window !== "undefined") {
-    return API_PATH;
+  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+  if (configured && !isLocalUrl(configured)) {
+    return configured;
   }
 
   const renderOrigin = getRenderOrigin();
@@ -44,20 +48,25 @@ export function getApiBaseUrl(): string {
   }
 
   return process.env.NODE_ENV === "production"
-    ? API_PATH
+    ? `http://127.0.0.1:${process.env.PORT || 5000}${API_PATH}`
     : "http://localhost:5000/api/v1";
 }
 
 export function getWsBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_WS_URL?.replace(/\/$/, "");
-
-  if (configured && (!isLocalUrl(configured) || isBrowserOnLocalhost())) {
-    return configured;
-  }
-
   if (typeof window !== "undefined") {
+    if (isBrowserOnLocalhost()) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${protocol}//${window.location.hostname}:5000`;
+    }
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${protocol}//${window.location.host}`;
+  }
+
+  const configured = process.env.NEXT_PUBLIC_WS_URL?.replace(/\/$/, "");
+
+  if (configured && !isLocalUrl(configured)) {
+    return configured;
   }
 
   const renderOrigin = getRenderOrigin();

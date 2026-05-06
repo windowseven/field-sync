@@ -1,7 +1,5 @@
 import { getApiBaseUrl } from "@/lib/config/endpoints";
 
-const BASE_URL = getApiBaseUrl();
-
 export interface ContactFormData {
   name: string;
   email: string;
@@ -10,7 +8,7 @@ export interface ContactFormData {
 }
 
 export async function submitContactForm(data: ContactFormData) {
-  const response = await fetch(`${BASE_URL}/contact/inquiries`, {
+  const response = await fetch(`${getApiBaseUrl()}/contact/inquiries`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),

@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { getApiBaseUrl } from "@/lib/config/endpoints";
 
-const BACKEND_BASE_URL = getApiBaseUrl();
-
 export async function proxyToBackend(
   request: Request,
   backendPath: string
 ): Promise<NextResponse> {
-  const url = `${BACKEND_BASE_URL}${backendPath}`;
+  const url = `${getApiBaseUrl()}${backendPath}`;
   const method = request.method;
   const contentType = request.headers.get("content-type");
   const hasBody = method !== "GET" && method !== "HEAD";

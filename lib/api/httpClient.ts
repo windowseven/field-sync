@@ -13,8 +13,6 @@ import { tokenManager } from "@/lib/auth/tokenManager";
 import { csrfManager } from "@/lib/security/csrf";
 import { getApiBaseUrl } from "@/lib/config/endpoints";
 
-const BASE_URL = getApiBaseUrl();
-
 // Security: Enforce HTTPS in production
 if (
   typeof window !== "undefined" &&
@@ -40,7 +38,8 @@ async function doRefresh(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
@@ -104,7 +103,8 @@ export async function apiRequest<T = unknown>(
   }
 
   // ─── Make request ─────────────────────────────────────────
-  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+  const baseUrl = getApiBaseUrl();
+  const url = path.startsWith("http") ? path : `${baseUrl}${path}`;
 
   let response: Response;
   try {

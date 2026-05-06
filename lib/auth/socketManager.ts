@@ -18,8 +18,6 @@ interface SocketOptions {
   onDisconnected?: () => void;
 }
 
-const WS_BASE = getWsBaseUrl();
-
 // ─── FieldSync Socket Manager ────────────────────────────────
 class FieldSyncSocket {
   private ws: WebSocket | null = null;
@@ -48,7 +46,7 @@ class FieldSyncSocket {
 
     // Attach token as query param (or use a ticket system)
     // In production: prefer a short-lived ticket from /api/auth/socket-ticket
-    const url = `${WS_BASE}${this.options.path ?? "/ws"}?token=${encodeURIComponent(token)}`;
+    const url = `${getWsBaseUrl()}${this.options.path ?? "/ws"}?token=${encodeURIComponent(token)}`;
 
     try {
       this.ws = new WebSocket(url);
