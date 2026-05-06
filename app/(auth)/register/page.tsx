@@ -12,7 +12,7 @@
 //   - Show/hide password toggles
 //   - Terms & Conditions required checkbox
 //   - Loading + disabled states
-//   - Redirects to /verify-otp on success
+//   - Redirects to /login on success
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -167,6 +167,7 @@ export default function RegisterPage() {
 
     const result = await registerUser({
       name: name.trim(),
+      first_name: name.trim().split(/\s+/)[0] || name.trim(),
       email: email.trim().toLowerCase(),
       password,
       role,
@@ -176,9 +177,7 @@ export default function RegisterPage() {
       setSuccess(true);
       // Small delay so the user sees the success state
       setTimeout(() => {
-        router.push(
-          `/verify-otp?email=${encodeURIComponent(email.trim().toLowerCase())}&context=registration`
-        );
+        router.push("/login?reason=registered");
       }, 600);
     }
   };
@@ -213,7 +212,7 @@ export default function RegisterPage() {
         <Alert className="mb-5 py-3 border-green-200/60 bg-green-50/60 dark:bg-green-950/20 dark:border-green-800/40">
           <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
           <AlertDescription className="text-xs ml-1 text-green-700 dark:text-green-400">
-            Account created! Redirecting to verification…
+            Account created! Redirecting to login...
           </AlertDescription>
         </Alert>
       )}
@@ -288,7 +287,7 @@ export default function RegisterPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="field_worker" className="text-sm">
+              <SelectItem value="field_agent" className="text-sm">
                 Field Worker — I work on-site
               </SelectItem>
               <SelectItem value="supervisor" className="text-sm">

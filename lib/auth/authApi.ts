@@ -8,6 +8,7 @@
 
 export interface RegisterPayload {
   name: string;
+  first_name?: string;
   email: string;
   phone?: string;
   password: string;
@@ -86,7 +87,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 export const authApi = {
   /**
    * POST /api/auth/register
-   * Creates a new inactive account and triggers OTP email/SMS.
+   * Creates a new account.
    */
   async register(payload: RegisterPayload): Promise<RegisterResponse> {
     const res = await fetch("/api/auth/register", {

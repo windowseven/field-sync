@@ -153,7 +153,7 @@ export function useLogout(requireConfirmation = false): UseLogoutReturn {
 }
 
 // ─────────────────────────────────────────────────────────────
-// useRegister — create new account, routes to OTP on success
+// useRegister — create new account
 // ─────────────────────────────────────────────────────────────
 interface UseRegisterReturn {
   register: (payload: RegisterPayload) => Promise<{ success: boolean } | null>;
@@ -438,6 +438,7 @@ const REDIRECT_MESSAGES: Record<string, string> = {
   cross_tab: "You were logged out from another tab.",
   session_expired: "Your session has expired. Please log in again.",
   verified: "Account verified successfully. Please sign in.",
+  registered: "Account created successfully. Please sign in.",
   password_reset: "Password reset successfully. Please sign in with your new password.",
 };
 
