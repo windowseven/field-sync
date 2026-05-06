@@ -21,6 +21,8 @@ services:
         value: "true"
       - key: TIDB_USER_PREFIX
         sync: false
+      - key: DB_USER_PREFIX
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET

@@ -12,8 +12,15 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const buildDbConfigFromEnv = () => {
   const databaseUrl = process.env.DATABASE_URL;
+  const getTidbUserPrefix = () => (
+    process.env.TIDB_USER_PREFIX ||
+    process.env.TIDB_USERNAME_PREFIX ||
+    process.env.DB_USER_PREFIX ||
+    ''
+  ).trim().replace(/\.$/, '');
+
   const withTidbUserPrefix = (user) => {
-    const prefix = process.env.TIDB_USER_PREFIX;
+    const prefix = getTidbUserPrefix();
 
     if (!prefix || !user || user.includes('.')) {
       return user;
@@ -45,6 +52,18 @@ const buildDbConfigFromEnv = () => {
     };
   };
 
+  const validateTidbUser = (config) => {
+    if (config.host.includes('tidbcloud.com') && !config.user.includes('.')) {
+      throw new Error(
+        'TiDB Cloud Starter/Essential requires a prefixed database username. ' +
+        'Set DB_USER to the full value from TiDB Connect, such as "<prefix>.root", ' +
+        'or set TIDB_USER_PREFIX to the prefix and DB_USER to "root".'
+      );
+    }
+
+    return config;
+  };
+
   if (databaseUrl) {
     try {
       const parsed = new URL(databaseUrl);
@@ -54,25 +73,25 @@ const buildDbConfigFromEnv = () => {
         throw new Error('DATABASE_URL is missing database name');
       }
 
-      return withSslIfNeeded({
+      return validateTidbUser(withSslIfNeeded({
         host: parsed.hostname,
         user: withTidbUserPrefix(decodeURIComponent(parsed.username || '')),
         password: decodeURIComponent(parsed.password || ''),
         database,
         port: parsed.port ? Number(parsed.port) : 3306,
-      });
+      }));
     } catch (error) {
       logger.warn(`Invalid DATABASE_URL, falling back to DB_* vars: ${error.message}`);
     }
   }
 
-  return withSslIfNeeded({
+  return validateTidbUser(withSslIfNeeded({
     host: process.env.DB_HOST || 'localhost',
     user: withTidbUserPrefix(process.env.DB_USER || 'root'),
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'fieldsync',
     port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
-  });
+  }));
 };
 
 const dbConfig = buildDbConfigFromEnv();
