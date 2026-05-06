@@ -19,6 +19,8 @@ services:
         sync: false
       - key: TIDB_ENABLE_SSL
         value: "true"
+      - key: TIDB_USER_PREFIX
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET

@@ -12,6 +12,16 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const buildDbConfigFromEnv = () => {
   const databaseUrl = process.env.DATABASE_URL;
+  const withTidbUserPrefix = (user) => {
+    const prefix = process.env.TIDB_USER_PREFIX;
+
+    if (!prefix || !user || user.includes('.')) {
+      return user;
+    }
+
+    return `${prefix}.${user}`;
+  };
+
   const shouldUseSsl = (host = '') => {
     const explicit = process.env.DB_SSL || process.env.TIDB_ENABLE_SSL;
 
@@ -46,7 +56,7 @@ const buildDbConfigFromEnv = () => {
 
       return withSslIfNeeded({
         host: parsed.hostname,
-        user: decodeURIComponent(parsed.username || ''),
+        user: withTidbUserPrefix(decodeURIComponent(parsed.username || '')),
         password: decodeURIComponent(parsed.password || ''),
         database,
         port: parsed.port ? Number(parsed.port) : 3306,
@@ -58,7 +68,7 @@ const buildDbConfigFromEnv = () => {
 
   return withSslIfNeeded({
     host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
+    user: withTidbUserPrefix(process.env.DB_USER || 'root'),
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'fieldsync',
     port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
