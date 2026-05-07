@@ -6,6 +6,8 @@
 
 // ─── Shapes ──────────────────────────────────────────────────
 
+import { getApiBaseUrl } from "@/lib/config/endpoints";
+
 export interface RegisterPayload {
   name: string;
   first_name?: string;
@@ -68,6 +70,42 @@ export class AuthApiError extends Error {
   }
 }
 
+const AUTH_REQUEST_TIMEOUT_MS = 15000;
+
+async function fetchAuthEndpoint(
+  path: string,
+  init: RequestInit
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    AUTH_REQUEST_TIMEOUT_MS
+  );
+
+  try {
+    return await fetch(`${getApiBaseUrl()}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new AuthApiError(
+        0,
+        "The server took too long to respond. Please try again.",
+        "REQUEST_TIMEOUT"
+      );
+    }
+
+    throw new AuthApiError(
+      0,
+      "Could not reach the server. Please check the backend URL and try again.",
+      "NETWORK_ERROR"
+    );
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   const json = await res.json().catch(() => ({}));
 
@@ -90,7 +128,7 @@ export const authApi = {
    * Creates a new account.
    */
   async register(payload: RegisterPayload): Promise<RegisterResponse> {
-    const res = await fetch("/api/auth/register", {
+    const res = await fetchAuthEndpoint("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -105,7 +143,7 @@ export const authApi = {
    * For password_reset: returns a short-lived resetToken.
    */
   async verifyOtp(payload: VerifyOtpPayload): Promise<VerifyOtpResponse> {
-    const res = await fetch("/api/auth/verify-otp", {
+    const res = await fetchAuthEndpoint("/auth/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -118,7 +156,7 @@ export const authApi = {
    * Sends a fresh OTP (rate-limited by backend).
    */
   async resendOtp(payload: ResendOtpPayload): Promise<{ message: string }> {
-    const res = await fetch("/api/auth/resend-otp", {
+    const res = await fetchAuthEndpoint("/auth/resend-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -134,7 +172,7 @@ export const authApi = {
   async forgotPassword(
     payload: ForgotPasswordPayload
   ): Promise<ForgotPasswordResponse> {
-    const res = await fetch("/api/auth/forgot-password", {
+    const res = await fetchAuthEndpoint("/auth/forgot-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -149,7 +187,7 @@ export const authApi = {
   async resetPassword(
     payload: ResetPasswordPayload
   ): Promise<ResetPasswordResponse> {
-    const res = await fetch("/api/auth/reset-password", {
+    const res = await fetchAuthEndpoint("/auth/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

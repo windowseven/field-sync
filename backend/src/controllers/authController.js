@@ -42,6 +42,7 @@ const registerSchema = z.object({
   first_name: z.string().min(1).max(50),
   email: z.string().email(),
   password: getPasswordSchema(),
+  role: z.enum(['field_agent', 'supervisor']).optional(),
   inviteCode: z.string().optional(),
   inviteToken: z.string().optional(),
 });
@@ -344,18 +345,19 @@ export const register = async (req, res) => {
 
       const id = crypto.randomUUID();
       const passwordHash = await bcrypt.hash(validated.password, 12);
+      const role = validated.role ?? 'field_agent';
 
       await pool.query(
-        'INSERT INTO users (id, name, first_name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?, "field_agent", "offline")',
-        [id, validated.name, validated.first_name, validated.email, passwordHash]
+        'INSERT INTO users (id, name, first_name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?, "offline")',
+        [id, validated.name, validated.first_name, validated.email, passwordHash, role]
       );
 
-      await logAudit(null, 'user.register', { user_id: id, email: validated.email });
+      await logAudit(null, 'user.register', { user_id: id, email: validated.email, role });
 
       logger.info(`New user registered: ${validated.email}`);
       res.status(201).json({
         status: 'success',
-        data: { id, message: 'User created. Login to continue.' },
+        data: { id, role, message: 'User created. Login to continue.' },
       });
     }
   } catch (error) {
