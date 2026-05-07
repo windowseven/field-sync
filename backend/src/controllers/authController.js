@@ -99,6 +99,24 @@ async function generateAndSendOtp(email, userName) {
   return otp;
 }
 
+function isPendingEmailVerification(user) {
+  return Boolean(user?.verification_code);
+}
+
+async function resendPendingRegistrationOtp(user) {
+  await generateAndSendOtp(user.email, user.first_name || user.name);
+  return {
+    status: 'success',
+    message: 'Account already exists but is not verified. We sent a fresh verification code to your email.',
+    data: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      pendingVerification: true,
+    },
+  };
+}
+
 // ─── Login ──────────────────────────────────────────────────
 export const login = async (req, res) => {
   try {
@@ -119,6 +137,14 @@ export const login = async (req, res) => {
       return res.status(401).json({
         status: 'error',
         message: 'Invalid email or password',
+      });
+    }
+
+    if (isPendingEmailVerification(user)) {
+      return res.status(403).json({
+        status: 'error',
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email before signing in.',
       });
     }
 
@@ -296,11 +322,24 @@ export const register = async (req, res) => {
           inviteType = 'email';
         }
 
-        const [existing] = await connection.query('SELECT id FROM users WHERE email = ?', [validated.email]);
+        const [existing] = await connection.query(
+          'SELECT id, name, first_name, email, role, verification_code FROM users WHERE email = ?',
+          [validated.email]
+        );
         if (existing.length > 0) {
+          if (isPendingEmailVerification(existing[0])) {
+            await connection.rollback();
+            connection.release();
+            const payload = await resendPendingRegistrationOtp(existing[0]);
+            return res.status(200).json(payload);
+          }
           await connection.rollback();
           connection.release();
-          return res.status(409).json({ status: 'error', message: 'Email already registered' });
+          return res.status(409).json({
+            status: 'error',
+            code: 'EMAIL_ALREADY_REGISTERED',
+            message: 'Email already registered. Please sign in instead.',
+          });
         }
 
         const id = crypto.randomUUID();
@@ -341,9 +380,20 @@ export const register = async (req, res) => {
         throw err;
       }
     } else {
-      const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [validated.email]);
+      const [existing] = await pool.query(
+        'SELECT id, name, first_name, email, role, verification_code FROM users WHERE email = ?',
+        [validated.email]
+      );
       if (existing.length > 0) {
-        return res.status(409).json({ status: 'error', message: 'Email already registered' });
+        if (isPendingEmailVerification(existing[0])) {
+          const payload = await resendPendingRegistrationOtp(existing[0]);
+          return res.status(200).json(payload);
+        }
+        return res.status(409).json({
+          status: 'error',
+          code: 'EMAIL_ALREADY_REGISTERED',
+          message: 'Email already registered. Please sign in instead.',
+        });
       }
 
       const id = crypto.randomUUID();
