@@ -21,6 +21,7 @@ export interface RegisterResponse {
   message: string;
   email: string;            // echoed back (possibly masked) for OTP page
   userId: string;
+  emailDeliveryFailed?: boolean; // true when account+OTP saved but email couldn't be sent
 }
 
 export interface VerifyOtpPayload {
@@ -118,9 +119,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
   }
 
   if (json?.data && typeof json.data === "object") {
+    // Merge top-level fields (e.g. emailDeliveryFailed) with data fields
+    const { data, status, ...topLevel } = json;
     return {
-      ...json.data,
-      message: json.message ?? json.data.message,
+      ...data,
+      ...topLevel,
+      message: json.message ?? data.message,
     } as T;
   }
 

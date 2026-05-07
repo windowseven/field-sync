@@ -369,13 +369,27 @@ export const register = async (req, res) => {
         connection.release();
         released = true;
 
-        await generateAndSendOtp(validated.email, validated.first_name || validated.name);
+        let emailFailed = false;
+        try {
+          await generateAndSendOtp(validated.email, validated.first_name || validated.name);
+        } catch (emailErr) {
+          if (emailErr instanceof EmailDeliveryError) {
+            emailFailed = true;
+            logger.warn(`OTP email failed for new user ${validated.email} (account created): ${emailErr.message}`);
+          } else {
+            throw emailErr;
+          }
+        }
+
         await logAudit(null, 'user.register', { user_id: id, email: validated.email, role, invite: inviteType });
 
         logger.info(`New user registered: ${validated.email}${inviteType ? ` (via ${inviteType} invite)` : ''}`);
         res.status(201).json({
           status: 'success',
-          message: 'Account created. Check your email for the verification code.',
+          message: emailFailed
+            ? 'Account created, but we could not send the verification email. Please use Resend Code on the next page.'
+            : 'Account created. Check your email for the verification code.',
+          emailDeliveryFailed: emailFailed,
           data: { id, email: validated.email, role, team },
         });
       } catch (err) {
@@ -413,26 +427,33 @@ export const register = async (req, res) => {
         [id, validated.name, validated.first_name, validated.email, passwordHash, role]
       );
 
-      await generateAndSendOtp(validated.email, validated.first_name || validated.name);
+      let emailFailed = false;
+      try {
+        await generateAndSendOtp(validated.email, validated.first_name || validated.name);
+      } catch (emailErr) {
+        if (emailErr instanceof EmailDeliveryError) {
+          emailFailed = true;
+          logger.warn(`OTP email failed for new user ${validated.email} (account created): ${emailErr.message}`);
+        } else {
+          throw emailErr;
+        }
+      }
+
       await logAudit(null, 'user.register', { user_id: id, email: validated.email, role });
 
       logger.info(`New user registered: ${validated.email}`);
       res.status(201).json({
         status: 'success',
-        message: 'Account created. Check your email for the verification code.',
+        message: emailFailed
+          ? 'Account created, but we could not send the verification email. Please use Resend Code on the next page.'
+          : 'Account created. Check your email for the verification code.',
+        emailDeliveryFailed: emailFailed,
         data: { id, email: validated.email, role },
       });
     }
   } catch (error) {
     if (error.name === 'ZodError') {
       return res.status(400).json({ status: 'error', message: error.errors[0].message });
-    }
-    if (error instanceof EmailDeliveryError) {
-      return res.status(503).json({
-        status: 'error',
-        code: 'EMAIL_DELIVERY_FAILED',
-        message: 'Account was created, but we could not send the verification email. Please try resending the code in a minute.',
-      });
     }
     logger.error('Register error:', error);
     res.status(500).json({ status: 'error', message: 'Registration failed' });

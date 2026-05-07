@@ -23,6 +23,7 @@ import {
   EyeOff,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   ArrowRight,
   User,
@@ -122,6 +123,7 @@ export default function RegisterPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [termsError, setTermsError] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [emailWarning, setEmailWarning] = useState(false);
 
   const [touched, setTouched] = useState({
     name: false,
@@ -175,11 +177,13 @@ export default function RegisterPage() {
 
     if (result?.success) {
       setSuccess(true);
+      if (result.emailDeliveryFailed) {
+        setEmailWarning(true);
+      }
       setTimeout(() => {
-        router.push(
-          `/verify-otp?context=registration&email=${encodeURIComponent(result.email)}`
-        );
-      }, 600);
+        const base = `/verify-otp?context=registration&email=${encodeURIComponent(result.email)}`;
+        router.push(result.emailDeliveryFailed ? `${base}&emailFailed=1` : base);
+      }, 1800);
     }
   };
 
@@ -208,8 +212,18 @@ export default function RegisterPage() {
         </Alert>
       )}
 
-      {/* Success */}
-      {success && (
+      {/* Email delivery warning (account created, email failed — redirect still fires) */}
+      {success && emailWarning && (
+        <Alert className="mb-5 py-3 border-amber-200/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-800/40">
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="text-xs ml-1 text-amber-700 dark:text-amber-400">
+            Account created! The verification email could not be sent right now — you can request a new code on the next page.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Normal success */}
+      {success && !emailWarning && (
         <Alert className="mb-5 py-3 border-green-200/60 bg-green-50/60 dark:bg-green-950/20 dark:border-green-800/40">
           <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
           <AlertDescription className="text-xs ml-1 text-green-700 dark:text-green-400">

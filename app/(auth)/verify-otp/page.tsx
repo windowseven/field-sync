@@ -56,13 +56,15 @@ export default function VerifyOtpPage() {
   const context = (params.get("context") ?? "registration") as
     | "registration"
     | "password_reset";
+  const emailFailed = params.get("emailFailed") === "1";
 
   const { verify, isLoading, error } = useVerifyOtp();
   const { resend, isResending, resendError } = useResendOtp();
 
   const [otp, setOtp] = useState("");
   const [success, setSuccess] = useState(false);
-  const [countdown, setCountdown] = useState(OTP_COUNTDOWN_SECONDS);
+  // When the email failed to send, unlock Resend right away (countdown = 0)
+  const [countdown, setCountdown] = useState(emailFailed ? 0 : OTP_COUNTDOWN_SECONDS);
   const [resendCount, setResendCount] = useState(0);
   const [resendSuccess, setResendSuccess] = useState(false);
 
@@ -149,6 +151,16 @@ export default function VerifyOtpPage() {
 
       {/* Alerts */}
       <div className="space-y-3 mb-6">
+        {/* Email delivery failed banner — unlock Resend immediately */}
+        {emailFailed && !resendSuccess && !success && (
+          <Alert className="py-3 border-amber-200/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-800/40">
+            <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            <AlertDescription className="text-xs ml-1 text-amber-700 dark:text-amber-400">
+              We couldn&apos;t send your verification code due to a temporary issue. Click <strong>Resend code</strong> below to get a new one.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {error && !success && (
           <Alert variant="destructive" className="py-3">
             <AlertCircle className="h-3.5 w-3.5" />
