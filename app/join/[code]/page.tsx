@@ -139,7 +139,9 @@ export default function JoinPage() {
       if (!res.ok) throw new Error(data.message || 'Registration failed')
 
       setSuccess(true)
-      setTimeout(() => router.push('/login'), 2000)
+      setTimeout(() => {
+        router.push(`/verify-otp?context=registration&email=${encodeURIComponent(email.trim().toLowerCase())}`)
+      }, 800)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         setError('The server took too long to respond. Please try again.')
@@ -193,7 +195,7 @@ export default function JoinPage() {
               <CheckCircle2 className="h-6 w-6 text-green-500" />
             </div>
             <h2 className="text-xl font-bold text-foreground mb-2">Welcome to FieldSync!</h2>
-            <p className="text-sm text-muted-foreground">Your account has been created. Redirecting to login...</p>
+            <p className="text-sm text-muted-foreground">Your account has been created. Redirecting to verification...</p>
           </div>
         </div>
       </div>

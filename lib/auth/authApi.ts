@@ -117,6 +117,13 @@ async function handleResponse<T>(res: Response): Promise<T> {
     );
   }
 
+  if (json?.data && typeof json.data === "object") {
+    return {
+      ...json.data,
+      message: json.message ?? json.data.message,
+    } as T;
+  }
+
   return json as T;
 }
 
@@ -190,7 +197,7 @@ export const authApi = {
     const res = await fetchAuthEndpoint("/auth/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ token: payload.otp, password: payload.password }),
     });
     return handleResponse<ResetPasswordResponse>(res);
   },

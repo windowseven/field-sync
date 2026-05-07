@@ -156,7 +156,7 @@ export function useLogout(requireConfirmation = false): UseLogoutReturn {
 // useRegister — create new account
 // ─────────────────────────────────────────────────────────────
 interface UseRegisterReturn {
-  register: (payload: RegisterPayload) => Promise<{ success: boolean } | null>;
+  register: (payload: RegisterPayload) => Promise<{ success: boolean; email: string } | null>;
   isLoading: boolean;
   error: string | null;
   clearError: () => void;
@@ -167,13 +167,13 @@ export function useRegister(): UseRegisterReturn {
   const [error, setError] = useState<string | null>(null);
 
   const register = useCallback(
-    async (payload: RegisterPayload): Promise<{ success: boolean } | null> => {
+    async (payload: RegisterPayload): Promise<{ success: boolean; email: string } | null> => {
       setIsLoading(true);
       setError(null);
 
       try {
-        await authApi.register(payload);
-        return { success: true };
+        const response = await authApi.register(payload);
+        return { success: true, email: response.email || payload.email };
       } catch (err) {
         const msg =
           err instanceof AuthApiError

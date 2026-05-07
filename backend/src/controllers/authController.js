@@ -54,6 +54,7 @@ const otpSchema = z.object({
 const verifyOtpSchema = z.object({
   email: z.string().email(),
   otp: z.string().length(6),
+  context: z.enum(['registration', 'password_reset']).optional(),
 });
 
 const resetPasswordSchema = z.object({
@@ -325,12 +326,14 @@ export const register = async (req, res) => {
         await connection.commit();
         connection.release();
 
+        await generateAndSendOtp(validated.email, validated.first_name || validated.name);
         await logAudit(null, 'user.register', { user_id: id, email: validated.email, role, invite: inviteType });
 
         logger.info(`New user registered: ${validated.email}${inviteType ? ` (via ${inviteType} invite)` : ''}`);
         res.status(201).json({
           status: 'success',
-          data: { id, role, team, message: 'User created. Login to continue.' },
+          message: 'Account created. Check your email for the verification code.',
+          data: { id, email: validated.email, role, team },
         });
       } catch (err) {
         await connection.rollback();
@@ -352,12 +355,14 @@ export const register = async (req, res) => {
         [id, validated.name, validated.first_name, validated.email, passwordHash, role]
       );
 
+      await generateAndSendOtp(validated.email, validated.first_name || validated.name);
       await logAudit(null, 'user.register', { user_id: id, email: validated.email, role });
 
       logger.info(`New user registered: ${validated.email}`);
       res.status(201).json({
         status: 'success',
-        data: { id, role, message: 'User created. Login to continue.' },
+        message: 'Account created. Check your email for the verification code.',
+        data: { id, email: validated.email, role },
       });
     }
   } catch (error) {
@@ -395,7 +400,7 @@ export const forgotPassword = async (req, res) => {
 // ─── Verify OTP ─────────────────────────────────────────────
 export const verifyOtp = async (req, res) => {
   try {
-    const { email, otp } = verifyOtpSchema.parse(req.body);
+    const { email, otp, context = 'registration' } = verifyOtpSchema.parse(req.body);
 
     const [rows] = await pool.query(
       'SELECT verification_expires FROM users WHERE email = ? AND verification_code = ?',
@@ -410,6 +415,16 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'OTP expired' });
     }
 
+    if (context === 'registration') {
+      await pool.query(
+        'UPDATE users SET verification_code = NULL, verification_expires = NULL WHERE email = ?',
+        [email]
+      );
+
+      await logAudit(null, 'user.verify_email', { email });
+      return res.json({ status: 'success', message: 'Account verified successfully' });
+    }
+
     const token = crypto.randomUUID();
     const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
@@ -418,7 +433,7 @@ export const verifyOtp = async (req, res) => {
       [token, expires, email]
     );
 
-    res.json({ status: 'success', data: { resetToken: token } });
+    res.json({ status: 'success', message: 'OTP verified', data: { resetToken: token } });
   } catch (error) {
     if (error.name === 'ZodError') {
       return res.status(400).json({ status: 'error', message: error.errors[0].message });
