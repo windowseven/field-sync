@@ -1,5 +1,17 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 import logger from '../utils/logger.js';
+
+dns.setDefaultResultOrder('ipv4first');
+
+export class EmailDeliveryError extends Error {
+  constructor(message, cause) {
+    super(message);
+    this.name = 'EmailDeliveryError';
+    this.cause = cause;
+    this.code = cause?.code;
+  }
+}
 
 // HTML entity escaping to prevent XSS in email templates
 function escapeHtml(str) {
@@ -20,6 +32,9 @@ const transporter = nodemailer.createTransport({
   port: smtpPort,
   secure: smtpPort === 465,
   family: 4,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -57,7 +72,7 @@ export const sendOtpEmail = async (email, otp, userName) => {
     logger.info(`OTP email sent to ${email}`);
   } catch (error) {
     logger.error('Email send failed:', error);
-    throw error;
+    throw new EmailDeliveryError('Unable to send verification email right now.', error);
   }
 };
 

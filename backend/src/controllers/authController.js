@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
-import { sendOtpEmail } from '../services/emailService.js';
+import { EmailDeliveryError, sendOtpEmail } from '../services/emailService.js';
 import { logAudit } from './auditLogController.js';
 import { getSecurityPolicies } from '../utils/securityPolicyStore.js';
 import { getPlatformControls } from '../utils/platformConfigStore.js';
@@ -259,6 +259,8 @@ export const register = async (req, res) => {
     if (inviteCode || inviteToken) {
       const connection = await pool.getConnection();
       try {
+        let committed = false;
+        let released = false;
         await connection.beginTransaction();
 
         if (inviteCode) {
@@ -363,7 +365,9 @@ export const register = async (req, res) => {
         }
 
         await connection.commit();
+        committed = true;
         connection.release();
+        released = true;
 
         await generateAndSendOtp(validated.email, validated.first_name || validated.name);
         await logAudit(null, 'user.register', { user_id: id, email: validated.email, role, invite: inviteType });
@@ -375,8 +379,12 @@ export const register = async (req, res) => {
           data: { id, email: validated.email, role, team },
         });
       } catch (err) {
-        await connection.rollback();
-        connection.release();
+        if (!committed) {
+          await connection.rollback();
+        }
+        if (!released) {
+          connection.release();
+        }
         throw err;
       }
     } else {
@@ -418,6 +426,13 @@ export const register = async (req, res) => {
   } catch (error) {
     if (error.name === 'ZodError') {
       return res.status(400).json({ status: 'error', message: error.errors[0].message });
+    }
+    if (error instanceof EmailDeliveryError) {
+      return res.status(503).json({
+        status: 'error',
+        code: 'EMAIL_DELIVERY_FAILED',
+        message: 'Account was created, but we could not send the verification email. Please try resending the code in a minute.',
+      });
     }
     logger.error('Register error:', error);
     res.status(500).json({ status: 'error', message: 'Registration failed' });
