@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, Mail, CheckCircle2, AlertCircle, ArrowLeft, Eye, EyeOff, User, Lock } from 'lucide-react'
 import { invitationService } from '@/lib/api/invitationService'
+import { getApiBaseUrl } from '@/lib/config/endpoints'
 import { validateName, validateEmail, validatePassword, validatePasswordMatch, checkPasswordStrength } from '@/lib/security/validation'
 import { cn } from '@/lib/utils'
 
@@ -115,11 +116,15 @@ export default function JoinPage() {
 
     setIsProcessing(true)
     setError(null)
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000)
+
     try {
       const isEmailInvite = !!inviteData.email
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(`${getApiBaseUrl()}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           name: name.trim(),
           first_name: name.trim().split(' ')[0],
@@ -136,8 +141,13 @@ export default function JoinPage() {
       setSuccess(true)
       setTimeout(() => router.push('/login'), 2000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed')
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('The server took too long to respond. Please try again.')
+      } else {
+        setError(err instanceof Error ? err.message : 'Registration failed')
+      }
     } finally {
+      window.clearTimeout(timeoutId)
       setIsProcessing(false)
     }
   }
