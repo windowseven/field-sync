@@ -20,7 +20,9 @@ function escapeHtml(str) {
 }
 
 function getFromAddress() {
-  return process.env.EMAIL_FROM || process.env.EMAIL_USER || 'onboarding@resend.dev';
+  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
+  if (process.env.RESEND_API_KEY) return 'onboarding@resend.dev';
+  return process.env.EMAIL_USER || 'onboarding@resend.dev';
 }
 
 async function sendViaApi({ to, subject, html }) {
