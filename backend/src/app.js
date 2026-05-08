@@ -262,6 +262,10 @@ app.use((err, req, res, next) => {
   const status = err.status || 'error';
 
   logger.error(`${err.name}: ${err.message}`);
+  if (err.stack) logger.debug(err.stack);
+  // Fallback: always write to stderr so Render logs capture it
+  console.error(`${new Date().toISOString()} [${err.name}] ${err.message}`);
+  if (err.stack) console.error(err.stack);
 
   res.status(statusCode).json({
     status,

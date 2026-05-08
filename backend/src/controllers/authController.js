@@ -177,7 +177,7 @@ export const login = async (req, res) => {
     if (error.name === 'ZodError') {
       return res.status(400).json({ status: 'error', message: error.errors[0].message });
     }
-    logger.error('Login error:', error);
+    logger.error(`Login error: ${error.message || error}`);
     res.status(500).json({ status: 'error', message: 'Internal Server Error' });
   }
 };
@@ -455,7 +455,8 @@ export const register = async (req, res) => {
     if (error.name === 'ZodError') {
       return res.status(400).json({ status: 'error', message: error.errors[0].message });
     }
-    logger.error('Register error:', error);
+    logger.error(`Register error: ${error.message || error}`);
+    if (error.stack) logger.debug(error.stack);
     res.status(500).json({ status: 'error', message: 'Registration failed' });
   }
 };
@@ -580,7 +581,7 @@ export const resendOtp = async (req, res) => {
     if (error.name === 'ZodError') {
       return res.status(400).json({ status: 'error', message: error.errors[0].message });
     }
-    logger.error('Resend OTP error:', error);
+    logger.error(`Resend OTP error: ${error.message || error}`);
     res.status(500).json({ status: 'error', message: 'Resend failed' });
   }
 };

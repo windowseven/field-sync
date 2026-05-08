@@ -24,25 +24,28 @@ function escapeHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
-const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-const smtpPort = Number(process.env.SMTP_PORT || 465);
-
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: smtpPort === 465,
-  family: 4,
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    servername: smtpHost,
-  },
-});
+function createTransporter() {
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = Number(process.env.SMTP_PORT || 587);
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: false,
+    requireTLS: true,
+    family: 4,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    auth: {
+      user: process.env.EMAIL_USER || '',
+      pass: process.env.EMAIL_PASS || '',
+    },
+    tls: {
+      servername: host,
+      rejectUnauthorized: false,
+    },
+  });
+}
 
 export const sendOtpEmail = async (email, otp, userName) => {
   const safeName = escapeHtml(userName);
@@ -68,10 +71,11 @@ export const sendOtpEmail = async (email, otp, userName) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await createTransporter().sendMail(mailOptions);
     logger.info(`OTP email sent to ${email}`);
   } catch (error) {
-    logger.error('Email send failed:', error);
+    logger.error(`Email send failed: ${error.message || error}`);
+    console.error(`[EMAIL] send failed to ${email}: ${error.message} (code: ${error.code}, command: ${error.command})`);
     throw new EmailDeliveryError('Unable to send verification email right now.', error);
   }
 };
@@ -104,10 +108,11 @@ export const sendResetEmail = async (email, token, userName) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await createTransporter().sendMail(mailOptions);
     logger.info(`Reset email sent to ${email}`);
   } catch (error) {
-    logger.error('Reset email failed:', error);
+    logger.error(`Reset email failed: ${error.message || error}`);
+    console.error(`[EMAIL] reset failed to ${email}: ${error.message}`);
     throw error;
   }
 };
@@ -142,10 +147,11 @@ export const sendContactInquiryEmail = async ({ name, email, subject, message })
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await createTransporter().sendMail(mailOptions);
     logger.info(`Contact inquiry email sent to ${supportEmail}`);
   } catch (error) {
-    logger.error('Contact inquiry email failed:', error);
+    logger.error(`Contact inquiry email failed: ${error.message || error}`);
+    console.error(`[EMAIL] contact inquiry failed: ${error.message}`);
     throw error;
   }
 };
@@ -178,10 +184,11 @@ export const sendInviteEmail = async (email, inviteUrl, role, team) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await createTransporter().sendMail(mailOptions);
     logger.info(`Invite email sent to ${email}`);
   } catch (error) {
-    logger.error('Invite email failed:', error);
+    logger.error(`Invite email failed: ${error.message || error}`);
+    console.error(`[EMAIL] invite failed to ${email}: ${error.message}`);
     throw error;
   }
 };
