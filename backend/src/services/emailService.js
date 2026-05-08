@@ -1,10 +1,4 @@
-import nodemailer from 'nodemailer';
-import net from 'net';
-import dns from 'dns';
 import logger from '../utils/logger.js';
-
-// Force IPv4 for all DNS lookups
-dns.setDefaultResultOrder('ipv4first');
 
 export class EmailDeliveryError extends Error {
   constructor(message, cause) {
@@ -15,7 +9,6 @@ export class EmailDeliveryError extends Error {
   }
 }
 
-// HTML entity escaping to prevent XSS in email templates
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -26,21 +19,56 @@ function escapeHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
-function tcpConnect(host, port, timeout = 4000) {
-  return new Promise((resolve) => {
-    const s = new net.Socket();
-    s.setTimeout(timeout);
-    s.on('connect', () => { s.destroy(); resolve(true); });
-    s.on('error', () => { s.destroy(); resolve(false); });
-    s.on('timeout', () => { s.destroy(); resolve(false); });
-    s.connect(port, host);
-  });
+function getFromAddress() {
+  return process.env.EMAIL_FROM || process.env.EMAIL_USER || 'onboarding@resend.dev';
 }
 
-async function createTransporter() {
+async function sendViaApi({ to, subject, html }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY environment variable is not set');
+  }
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: getFromAddress(),
+      to: [to],
+      subject,
+      html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Resend API error (${res.status}): ${body}`);
+  }
+}
+
+async function sendViaSmtp({ to, subject, html }) {
+  const nodemailer = (await import('nodemailer')).default;
+  const dns = (await import('dns')).default;
+  const net = (await import('net')).default;
+
+  dns.setDefaultResultOrder('ipv4first');
+
+  function tcpConnect(host, port, timeout = 4000) {
+    return new Promise((resolve) => {
+      const s = new net.Socket();
+      s.setTimeout(timeout);
+      s.on('connect', () => { s.destroy(); resolve(true); });
+      s.on('error', () => { s.destroy(); resolve(false); });
+      s.on('timeout', () => { s.destroy(); resolve(false); });
+      s.connect(port, host);
+    });
+  }
+
   const hostname = process.env.SMTP_HOST || 'smtp.gmail.com';
 
-  // Resolve IPv4 addresses
   let ips = [];
   try {
     ips = await dns.promises.resolve4(hostname);
@@ -48,7 +76,6 @@ async function createTransporter() {
     ips = [hostname];
   }
 
-  // Probe IP:port combinations (465 SSL first, then 587 STARTTLS)
   const configs = [];
   for (const ip of ips) {
     configs.push({ host: ip, port: 465, secure: true });
@@ -60,8 +87,7 @@ async function createTransporter() {
   for (const cfg of configs) {
     const ok = await tcpConnect(cfg.host, cfg.port);
     if (ok) {
-      logger.info(`SMTP reachable at ${cfg.host}:${cfg.port}`);
-      return nodemailer.createTransport({
+      const transporter = nodemailer.createTransport({
         host: cfg.host,
         port: cfg.port,
         secure: cfg.secure,
@@ -78,41 +104,38 @@ async function createTransporter() {
           rejectUnauthorized: false,
         },
       });
+      await transporter.sendMail({
+        from: `"FieldSync" <${getFromAddress()}>`,
+        to,
+        subject,
+        html,
+      });
+      return;
     }
   }
 
-  // Nothing worked — return a transport anyway; it will fail with a clear error
-  logger.error(`No SMTP endpoint reachable for ${hostname} (tried ${ips.length} IPs × 2 ports)`);
-  return nodemailer.createTransport({
-    host: ips[0] || hostname,
-    port: 465,
-    secure: true,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    auth: {
-      user: process.env.EMAIL_USER || '',
-      pass: process.env.EMAIL_PASS || '',
-    },
-    tls: {
-      servername: hostname,
-      rejectUnauthorized: false,
-    },
-  });
+  throw new Error(`SMTP unreachable for ${hostname} (tried ${ips.length} IPs × 2 ports)`);
 }
 
-export const sendOtpEmail = async (email, otp, userName) => {
-  const safeName = escapeHtml(userName);
-  const safeOtp = escapeHtml(otp);
+async function sendEmail({ to, subject, html }) {
+  if (process.env.RESEND_API_KEY) {
+    await sendViaApi({ to, subject, html });
+  } else {
+    await sendViaSmtp({ to, subject, html });
+  }
+}
 
-  const mailOptions = {
-    from: `"FieldSync" <${process.env.EMAIL_USER}>`,
-    to: email,
+// ─── Template helpers ──────────────────────────────────────────
+
+function otpTemplate(name, otp, message = 'Your verification code for FieldSync is:') {
+  const safeName = escapeHtml(name);
+  const safeOtp = escapeHtml(otp);
+  return {
     subject: 'FieldSync OTP Verification',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #333;">Hello ${safeName},</h2>
-        <p>Your verification code for FieldSync is:</p>
+        <p>${message}</p>
         <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
           <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1d4ed8;">${safeOtp}</span>
         </div>
@@ -123,25 +146,11 @@ export const sendOtpEmail = async (email, otp, userName) => {
       </div>
     `,
   };
+}
 
-  try {
-    const transporter = await createTransporter();
-    await transporter.sendMail(mailOptions);
-    logger.info(`OTP email sent to ${email}`);
-  } catch (error) {
-    logger.error(`Email send failed: ${error.message || error}`);
-    console.error(`[EMAIL] send failed to ${email}: ${error.message} (code: ${error.code}, command: ${error.command})`);
-    throw new EmailDeliveryError('Unable to send verification email right now.', error);
-  }
-};
-
-export const sendResetEmail = async (email, token, userName) => {
-  const safeName = escapeHtml(userName);
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-
-  const mailOptions = {
-    from: `"FieldSync" <${process.env.EMAIL_USER}>`,
-    to: email,
+function resetTemplate(name, frontendUrl, token) {
+  const safeName = escapeHtml(name);
+  return {
     subject: 'FieldSync Password Reset',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -161,28 +170,15 @@ export const sendResetEmail = async (email, token, userName) => {
       </div>
     `,
   };
+}
 
-  try {
-    const transporter = await createTransporter();
-    await transporter.sendMail(mailOptions);
-    logger.info(`Reset email sent to ${email}`);
-  } catch (error) {
-    logger.error(`Reset email failed: ${error.message || error}`);
-    console.error(`[EMAIL] reset failed to ${email}: ${error.message}`);
-    throw error;
-  }
-};
-
-export const sendContactInquiryEmail = async ({ name, email, subject, message }) => {
+function contactTemplate(name, email, subject, message) {
   const safeName = escapeHtml(name);
   const safeEmail = escapeHtml(email);
   const safeSubject = escapeHtml(subject);
   const safeMessage = escapeHtml(message).replace(/\n/g, '<br>');
-
   const supportEmail = process.env.SUPPORT_EMAIL || 'fieldsyncsupport@gmail.com';
-
-  const mailOptions = {
-    from: `"FieldSync Contact" <${process.env.EMAIL_USER}>`,
+  return {
     to: supportEmail,
     subject: `New Contact Inquiry: ${safeSubject}`,
     html: `
@@ -201,26 +197,13 @@ export const sendContactInquiryEmail = async ({ name, email, subject, message })
       </div>
     `,
   };
+}
 
-  try {
-    const transporter = await createTransporter();
-    await transporter.sendMail(mailOptions);
-    logger.info(`Contact inquiry email sent to ${supportEmail}`);
-  } catch (error) {
-    logger.error(`Contact inquiry email failed: ${error.message || error}`);
-    console.error(`[EMAIL] contact inquiry failed: ${error.message}`);
-    throw error;
-  }
-};
-
-export const sendInviteEmail = async (email, inviteUrl, role, team) => {
+function inviteTemplate(email, inviteUrl, role, team) {
   const safeEmail = escapeHtml(email);
   const safeRole = escapeHtml(role.replace('_', ' '));
   const safeTeam = escapeHtml(team || 'your team');
-
-  const mailOptions = {
-    from: `"FieldSync" <${process.env.EMAIL_USER}>`,
-    to: email,
+  return {
     subject: `You're invited to join FieldSync as ${safeRole}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -239,10 +222,51 @@ export const sendInviteEmail = async (email, inviteUrl, role, team) => {
       </div>
     `,
   };
+}
 
+// ─── Public send functions ──────────────────────────────────────
+
+export const sendOtpEmail = async (email, otp, userName) => {
+  const { subject, html } = otpTemplate(userName, otp);
   try {
-    const transporter = await createTransporter();
-    await transporter.sendMail(mailOptions);
+    await sendEmail({ to: email, subject, html });
+    logger.info(`OTP email sent to ${email}`);
+  } catch (error) {
+    logger.error(`Email send failed: ${error.message || error}`);
+    console.error(`[EMAIL] send failed to ${email}: ${error.message}`);
+    throw new EmailDeliveryError('Unable to send verification email right now.', error);
+  }
+};
+
+export const sendResetEmail = async (email, token, userName) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const { subject, html } = resetTemplate(userName, frontendUrl, token);
+  try {
+    await sendEmail({ to: email, subject, html });
+    logger.info(`Reset email sent to ${email}`);
+  } catch (error) {
+    logger.error(`Reset email failed: ${error.message || error}`);
+    console.error(`[EMAIL] reset failed to ${email}: ${error.message}`);
+    throw error;
+  }
+};
+
+export const sendContactInquiryEmail = async ({ name, email, subject, message }) => {
+  const { to, subject: subj, html } = contactTemplate(name, email, subject, message);
+  try {
+    await sendEmail({ to, subject: subj, html });
+    logger.info(`Contact inquiry email sent to ${to}`);
+  } catch (error) {
+    logger.error(`Contact inquiry email failed: ${error.message || error}`);
+    console.error(`[EMAIL] contact inquiry failed: ${error.message}`);
+    throw error;
+  }
+};
+
+export const sendInviteEmail = async (email, inviteUrl, role, team) => {
+  const { subject, html } = inviteTemplate(email, inviteUrl, role, team);
+  try {
+    await sendEmail({ to: email, subject, html });
     logger.info(`Invite email sent to ${email}`);
   } catch (error) {
     logger.error(`Invite email failed: ${error.message || error}`);
