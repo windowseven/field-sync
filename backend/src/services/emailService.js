@@ -24,11 +24,28 @@ function escapeHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
-function createTransporter() {
+const RESOLVED_IP_CACHE = new Map();
+const RESOLVED_IP_TTL = 10 * 60 * 1000;
+
+async function resolveIpv4(host) {
+  const cached = RESOLVED_IP_CACHE.get(host);
+  if (cached && Date.now() < cached.expires) return cached.ip;
+  try {
+    const addrs = await dns.promises.resolve4(host);
+    const ip = addrs[0];
+    RESOLVED_IP_CACHE.set(host, { ip, expires: Date.now() + RESOLVED_IP_TTL });
+    return ip;
+  } catch {
+    return host;
+  }
+}
+
+async function createTransporter() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = Number(process.env.SMTP_PORT || 587);
+  const address = await resolveIpv4(host);
   return nodemailer.createTransport({
-    host,
+    host: address,
     port,
     secure: false,
     requireTLS: true,
@@ -42,9 +59,6 @@ function createTransporter() {
     tls: {
       servername: host,
       rejectUnauthorized: false,
-    },
-    lookup: (hostname, opts, cb) => {
-      dns.lookup(hostname, { ...opts, family: 4, all: false }, cb);
     },
   });
 }
@@ -73,7 +87,8 @@ export const sendOtpEmail = async (email, otp, userName) => {
   };
 
   try {
-    await createTransporter().sendMail(mailOptions);
+    const transporter = await createTransporter();
+    await transporter.sendMail(mailOptions);
     logger.info(`OTP email sent to ${email}`);
   } catch (error) {
     logger.error(`Email send failed: ${error.message || error}`);
@@ -110,7 +125,8 @@ export const sendResetEmail = async (email, token, userName) => {
   };
 
   try {
-    await createTransporter().sendMail(mailOptions);
+    const transporter = await createTransporter();
+    await transporter.sendMail(mailOptions);
     logger.info(`Reset email sent to ${email}`);
   } catch (error) {
     logger.error(`Reset email failed: ${error.message || error}`);
@@ -149,7 +165,8 @@ export const sendContactInquiryEmail = async ({ name, email, subject, message })
   };
 
   try {
-    await createTransporter().sendMail(mailOptions);
+    const transporter = await createTransporter();
+    await transporter.sendMail(mailOptions);
     logger.info(`Contact inquiry email sent to ${supportEmail}`);
   } catch (error) {
     logger.error(`Contact inquiry email failed: ${error.message || error}`);
@@ -186,7 +203,8 @@ export const sendInviteEmail = async (email, inviteUrl, role, team) => {
   };
 
   try {
-    await createTransporter().sendMail(mailOptions);
+    const transporter = await createTransporter();
+    await transporter.sendMail(mailOptions);
     logger.info(`Invite email sent to ${email}`);
   } catch (error) {
     logger.error(`Invite email failed: ${error.message || error}`);
