@@ -1,7 +1,9 @@
 import nodemailer from 'nodemailer';
+import net from 'net';
 import dns from 'dns';
 import logger from '../utils/logger.js';
 
+// Force IPv4 for all DNS lookups
 dns.setDefaultResultOrder('ipv4first');
 
 export class EmailDeliveryError extends Error {
@@ -24,40 +26,76 @@ function escapeHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
-const RESOLVED_IP_CACHE = new Map();
-const RESOLVED_IP_TTL = 10 * 60 * 1000;
-
-async function resolveIpv4(host) {
-  const cached = RESOLVED_IP_CACHE.get(host);
-  if (cached && Date.now() < cached.expires) return cached.ip;
-  try {
-    const addrs = await dns.promises.resolve4(host);
-    const ip = addrs[0];
-    RESOLVED_IP_CACHE.set(host, { ip, expires: Date.now() + RESOLVED_IP_TTL });
-    return ip;
-  } catch {
-    return host;
-  }
+function tcpConnect(host, port, timeout = 4000) {
+  return new Promise((resolve) => {
+    const s = new net.Socket();
+    s.setTimeout(timeout);
+    s.on('connect', () => { s.destroy(); resolve(true); });
+    s.on('error', () => { s.destroy(); resolve(false); });
+    s.on('timeout', () => { s.destroy(); resolve(false); });
+    s.connect(port, host);
+  });
 }
 
 async function createTransporter() {
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = Number(process.env.SMTP_PORT || 587);
-  const address = await resolveIpv4(host);
+  const hostname = process.env.SMTP_HOST || 'smtp.gmail.com';
+
+  // Resolve IPv4 addresses
+  let ips = [];
+  try {
+    ips = await dns.promises.resolve4(hostname);
+  } catch {
+    ips = [hostname];
+  }
+
+  // Probe IP:port combinations (465 SSL first, then 587 STARTTLS)
+  const configs = [];
+  for (const ip of ips) {
+    configs.push({ host: ip, port: 465, secure: true });
+  }
+  for (const ip of ips) {
+    configs.push({ host: ip, port: 587, secure: false, requireTLS: true });
+  }
+
+  for (const cfg of configs) {
+    const ok = await tcpConnect(cfg.host, cfg.port);
+    if (ok) {
+      logger.info(`SMTP reachable at ${cfg.host}:${cfg.port}`);
+      return nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        requireTLS: cfg.requireTLS || false,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+        auth: {
+          user: process.env.EMAIL_USER || '',
+          pass: process.env.EMAIL_PASS || '',
+        },
+        tls: {
+          servername: hostname,
+          rejectUnauthorized: false,
+        },
+      });
+    }
+  }
+
+  // Nothing worked — return a transport anyway; it will fail with a clear error
+  logger.error(`No SMTP endpoint reachable for ${hostname} (tried ${ips.length} IPs × 2 ports)`);
   return nodemailer.createTransport({
-    host: address,
-    port,
-    secure: false,
-    requireTLS: true,
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
+    host: ips[0] || hostname,
+    port: 465,
+    secure: true,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
       user: process.env.EMAIL_USER || '',
       pass: process.env.EMAIL_PASS || '',
     },
     tls: {
-      servername: host,
+      servername: hostname,
       rejectUnauthorized: false,
     },
   });
