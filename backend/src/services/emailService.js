@@ -21,16 +21,13 @@ function escapeHtml(str) {
 
 function getFromAddress() {
   if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
+  if (process.env.SENDGRID_API_KEY) return process.env.EMAIL_USER || 'noreply@field-sync.com';
   if (process.env.RESEND_API_KEY) return 'onboarding@resend.dev';
-  return process.env.EMAIL_USER || 'onboarding@resend.dev';
+  return process.env.EMAIL_USER || 'noreply@field-sync.com';
 }
 
-async function sendViaApi({ to, subject, html }) {
+async function sendViaResend({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error('RESEND_API_KEY environment variable is not set');
-  }
-
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -44,10 +41,30 @@ async function sendViaApi({ to, subject, html }) {
       html,
     }),
   });
-
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Resend API error (${res.status}): ${body}`);
+  }
+}
+
+async function sendViaSendGrid({ to, subject, html }) {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: getFromAddress() },
+      subject,
+      content: [{ type: 'text/html', value: html }],
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`SendGrid API error (${res.status}): ${body}`);
   }
 }
 
@@ -120,8 +137,10 @@ async function sendViaSmtp({ to, subject, html }) {
 }
 
 async function sendEmail({ to, subject, html }) {
-  if (process.env.RESEND_API_KEY) {
-    await sendViaApi({ to, subject, html });
+  if (process.env.SENDGRID_API_KEY) {
+    await sendViaSendGrid({ to, subject, html });
+  } else if (process.env.RESEND_API_KEY) {
+    await sendViaResend({ to, subject, html });
   } else {
     await sendViaSmtp({ to, subject, html });
   }
