@@ -32,7 +32,6 @@ function createTransporter() {
     port,
     secure: false,
     requireTLS: true,
-    family: 4,
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 20000,
@@ -43,6 +42,9 @@ function createTransporter() {
     tls: {
       servername: host,
       rejectUnauthorized: false,
+    },
+    lookup: (hostname, opts, cb) => {
+      dns.lookup(hostname, { ...opts, family: 4, all: false }, cb);
     },
   });
 }
