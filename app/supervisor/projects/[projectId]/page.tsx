@@ -194,7 +194,9 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ pro
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estimated Finish</p>
-                    <p className="font-medium text-emerald-500">Jun 15, 2026</p>
+                    <p className="font-medium text-emerald-500">
+                      {project.deadline ? new Date(new Date(project.deadline).getTime() - 14 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
+                    </p>
                   </div>
                 </div>
 
@@ -229,7 +231,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ pro
                         </div>
                         <span className="text-xs font-mono">{team.member_count} members</span>
                       </div>
-                      <Progress value={Math.floor(Math.random() * 40) + 60} className="h-1" />
+                      <Progress value={team.tasks_completed && team.tasks_pending ? Math.round((team.tasks_completed / (team.tasks_completed + team.tasks_pending)) * 100) : 0} className="h-1" />
                     </div>
                   )) : (
                     <div className="p-8 text-center text-muted-foreground text-sm italic">
@@ -293,40 +295,42 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ pro
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold">Low Connectivity Zones</p>
-                    <p className="text-[10px] text-muted-foreground">Team Gamma reporting delayed uploads in Central Zone.</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold">Deadline Risk</p>
-                    <p className="text-[10px] text-muted-foreground">Team Delta current rate is 15% below target.</p>
-                  </div>
+                  {logs.filter(l => l.severity === 'high').slice(0, 3).map((log, i) => (
+                    <div key={i} className="space-y-1">
+                      <p className="text-xs font-semibold">{log.action}</p>
+                      <p className="text-[10px] text-muted-foreground">{log.details}</p>
+                    </div>
+                  ))}
+                  {logs.filter(l => l.severity === 'high').length === 0 && (
+                    <p className="text-xs text-muted-foreground">No critical alerts at this time.</p>
+                  )}
                 </CardContent>
               </Card>
 
               {/* Resource Contacts */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold">Project Shield Leaders</CardTitle>
+                  <CardTitle className="text-sm font-bold">Team Leaders</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {[
-                    { name: 'Sarah Johnson', role: 'Team Leader', initial: 'SJ' },
-                    { name: 'James Kariuki', role: 'Team Leader', initial: 'JK' },
-                  ].map((leader) => (
-                    <div key={leader.name} className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
-                        {leader.initial}
+                  {teams.filter((t: any) => t.leader).slice(0, 5).map((team: any) => {
+                    const name = team.leader?.name || team.name + ' Leader';
+                    const initials = name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+                    return (
+                      <div key={team.id} className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                          {initials}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium">{name}</p>
+                          <p className="text-[10px] text-muted-foreground">{team.name} Leader</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-medium">{leader.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{leader.role}</p>
-                      </div>
-                      <Button variant="ghost" size="icon" className="ml-auto h-7 w-7">
-                        <ArrowUpRight className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  {(!teams || teams.length === 0) && (
+                    <p className="text-xs text-muted-foreground">No team leaders assigned.</p>
+                  )}
                   <Button variant="outline" size="sm" className="w-full text-[10px] h-8" asChild>
                     <Link href={`${base}/users`}>Manage All Project Members</Link>
                   </Button>

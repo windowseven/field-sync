@@ -26,6 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { invitationService, CreateInviteLinkParams, SendEmailInviteParams } from '@/lib/api/invitationService'
+import { teamService } from '@/lib/api/teamService'
 import { useToast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -81,6 +82,7 @@ export default function InvitationsPage() {
   const [inviteTeam, setInviteTeam] = useState('')
   const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([])
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -105,13 +107,15 @@ export default function InvitationsPage() {
         setIsLoading(true)
         setError(null)
 
-        const [links, invites] = await Promise.all([
+        const [links, invites, projectTeams] = await Promise.all([
           invitationService.getInviteLinks(projectId),
           invitationService.getEmailInvites(projectId),
+          teamService.getByProject(projectId),
         ])
 
         setInviteLinks(links.map(invitationService.transformInviteLink))
         setPendingInvites(invites.map(invitationService.transformEmailInvite))
+        setTeams(projectTeams.map((t: any) => ({ id: t.id, name: t.name })))
       } catch (err) {
         console.error('Failed to fetch invitations:', err)
         setError('Failed to load invitations. Please try again.')
@@ -297,11 +301,10 @@ export default function InvitationsPage() {
                         <SelectValue placeholder="Select team..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="alpha">Team Alpha</SelectItem>
-                        <SelectItem value="beta">Team Beta</SelectItem>
-                        <SelectItem value="gamma">Team Gamma</SelectItem>
-                        <SelectItem value="delta">Team Delta</SelectItem>
-                        <SelectItem value="echo">Team Echo</SelectItem>
+                        {teams.map(t => (
+                          <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                        ))}
+                        {teams.length === 0 && <SelectItem value="none" disabled>No teams available</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
@@ -466,9 +469,10 @@ export default function InvitationsPage() {
                             <Select value={inviteTeam} onValueChange={setInviteTeam}>
                               <SelectTrigger><SelectValue placeholder="Select team..." /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="alpha">Team Alpha</SelectItem>
-                                <SelectItem value="beta">Team Beta</SelectItem>
-                                <SelectItem value="gamma">Team Gamma</SelectItem>
+                                {teams.map(t => (
+                                  <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                ))}
+                                {teams.length === 0 && <SelectItem value="none" disabled>No teams available</SelectItem>}
                               </SelectContent>
                             </Select>
                           </div>

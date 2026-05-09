@@ -28,6 +28,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { zoneService } from '@/lib/api/zoneService'
 import { projectService, ApiProject } from '@/lib/api/projectService'
+import { teamService } from '@/lib/api/teamService'
 
 interface Zone {
   id: string
@@ -52,6 +53,7 @@ const statusConfig = {
 
 export default function SupervisorZonesPage() {
   const [zonesState, setZonesState] = React.useState<Zone[]>([])
+  const [teams, setTeams] = React.useState<{ id: string; name: string }[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [createOpen, setCreateOpen] = React.useState(false)
@@ -71,7 +73,10 @@ export default function SupervisorZonesPage() {
           return
         }
 
-        const projectZones = await zoneService.getByProject(activeProject.id)
+        const [projectZones, projectTeams] = await Promise.all([
+          zoneService.getByProject(activeProject.id),
+          teamService.getByProject(activeProject.id),
+        ])
 
         const transformed = projectZones.map((zone: any, index: number) => ({
           ...zoneService.transformForFrontend(zone),
@@ -79,6 +84,7 @@ export default function SupervisorZonesPage() {
         }))
 
         setZonesState(transformed)
+        setTeams(projectTeams.map((t: any) => ({ id: t.id, name: t.name })))
         setError(null)
       } catch (err) {
         console.error('Failed to fetch zones:', err)
@@ -139,16 +145,17 @@ export default function SupervisorZonesPage() {
                       <Input placeholder="Brief area description" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Assign Team</Label>
-                      <Select>
-                        <SelectTrigger><SelectValue placeholder="Select team (optional)" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Leave Unassigned</SelectItem>
-                          <SelectItem value="alpha">Team Alpha</SelectItem>
-                          <SelectItem value="beta">Team Beta</SelectItem>
-                          <SelectItem value="gamma">Team Gamma</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <Label>Assign Team</Label>
+                    <Select>
+                      <SelectTrigger><SelectValue placeholder="Select team (optional)" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Leave Unassigned</SelectItem>
+                        {teams.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                        {teams.length === 0 && <SelectItem value="none" disabled>No teams available</SelectItem>}
+                      </SelectContent>
+                    </Select>
                     </div>
                     <p className="text-xs text-muted-foreground bg-muted rounded-md p-3">
                       Zone boundaries are drawn directly on the Live Map. After creating the zone, go to Live Map to draw its geofence.

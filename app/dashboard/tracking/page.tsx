@@ -94,12 +94,19 @@ const teamColorsMap: Record<string, string> = {
 
 const defaultUsers: TrackedUser[] = []
 
-const teamStats = [
-  { team: 'Alpha', active: 3, idle: 1, offline: 0, color: 'bg-chart-1' },
-  { team: 'Beta', active: 2, idle: 0, offline: 0, color: 'bg-chart-2' },
-  { team: 'Gamma', active: 1, idle: 0, offline: 1, color: 'bg-chart-3' },
-  { team: 'Delta', active: 1, idle: 0, offline: 0, color: 'bg-chart-4' },
-]
+function computeTeamStats(users: TrackedUser[]) {
+  const map = new Map<string, { active: number; idle: number; offline: number }>()
+  for (const u of users) {
+    if (!map.has(u.team)) map.set(u.team, { active: 0, idle: 0, offline: 0 })
+    const stats = map.get(u.team)!
+    if (u.status === 'active' || u.status === 'moving') stats.active++
+    else if (u.status === 'idle') stats.idle++
+    else stats.offline++
+  }
+  const colors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
+  let i = 0
+  return Array.from(map.entries()).map(([team, s]) => ({ team, ...s, color: colors[i++ % colors.length] }))
+}
 
 function getStatusBadge(status: TrackedUser['status']) {
   switch (status) {
@@ -290,7 +297,7 @@ export default function TrackingPage() {
                 <div className="flex items-center gap-4">
                   <CardTitle className="text-base">Live Map</CardTitle>
                   <div className="flex items-center gap-2">
-                    {teamStats.map((team) => (
+                    {computeTeamStats(trackedUsers).map((team) => (
                       <div key={team.team} className="flex items-center gap-1.5">
                         <span className={cn('h-3 w-3 rounded-full', team.color)} />
                         <span className="text-xs text-muted-foreground">{team.team}</span>

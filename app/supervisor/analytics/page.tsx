@@ -1,8 +1,9 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import {
   BarChart3, TrendingUp, Users, ClipboardList, MapPin,
-  Clock, Award, Activity,
+  Clock, Award, Activity, Loader2, XCircle,
 } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -16,61 +17,81 @@ import { Button } from '@/components/ui/button'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
-import { useState } from 'react'
+import { analyticsService } from '@/lib/api/analyticsService'
+import { projectService } from '@/lib/api/projectService'
 
-const dailySubmissions = [
-  { date: 'Mar 1', submissions: 22, agents: 28 },
-  { date: 'Mar 8', submissions: 45, agents: 35 },
-  { date: 'Mar 15', submissions: 38, agents: 32 },
-  { date: 'Mar 22', submissions: 61, agents: 40 },
-  { date: 'Mar 29', submissions: 55, agents: 38 },
-  { date: 'Apr 5', submissions: 72, agents: 42 },
-  { date: 'Apr 9', submissions: 48, agents: 39 },
-]
-
-const teamSubmissions = [
-  { team: 'Alpha', submissions: 87, target: 110, coverage: 79 },
-  { team: 'Beta', submissions: 72, target: 106, coverage: 68 },
-  { team: 'Gamma', submissions: 50, target: 91, coverage: 55 },
-  { team: 'Delta', submissions: 22, target: 130, coverage: 50 },
-  { team: 'Echo', submissions: 61, target: 104, coverage: 64 },
-]
-
-const zoneTime = [
-  { zone: 'Zone A', hours: 142, agents: 9 },
-  { zone: 'Zone C', hours: 128, agents: 8 },
-  { zone: 'Zone E', hours: 97, agents: 7 },
-  { zone: 'Zone F', hours: 88, agents: 10 },
-  { zone: 'Zone H', hours: 114, agents: 8 },
-]
-
-const topAgents = [
-  { name: 'Sarah Johnson', team: 'Alpha', submissions: 87, rate: '12/day', color: '#22c55e' },
-  { name: 'Kojo Acheampong', team: 'Echo', submissions: 61, rate: '9/day', color: '#06b6d4' },
-  { name: 'Mwangi Njoroge', team: 'Echo', submissions: 61, rate: '9/day', color: '#06b6d4' },
-  { name: 'James Kariuki', team: 'Beta', submissions: 56, rate: '8/day', color: '#3b82f6' },
-  { name: 'Kwame Asante', team: 'Alpha', submissions: 43, rate: '6/day', color: '#22c55e' },
-]
-
-const teamRadar = [
-  { subject: 'Speed', Alpha: 90, Beta: 75, Gamma: 60 },
-  { subject: 'Coverage', Alpha: 79, Beta: 68, Gamma: 55 },
-  { subject: 'Accuracy', Alpha: 85, Beta: 80, Gamma: 70 },
-  { subject: 'Attendance', Alpha: 95, Beta: 88, Gamma: 72 },
-  { subject: 'Response', Alpha: 88, Beta: 72, Gamma: 65 },
-]
-
-const coveragePie = [
-  { name: 'Covered', value: 67, color: 'hsl(var(--primary))' },
-  { name: 'Remaining', value: 33, color: 'hsl(var(--muted))' },
-]
+const AGENT_COLORS = ['#22c55e', '#06b6d4', '#3b82f6', '#f59e0b', '#ef4444']
 
 export default function SupervisorAnalyticsPage() {
   const [period, setPeriod] = useState('week')
+  const [analytics, setAnalytics] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true)
+      try {
+        const projects = await projectService.getAll()
+        const activeProject = projects.find((p: any) => p.status === 'active') || projects[0]
+        if (activeProject) {
+          const data = await analyticsService.getProjectAnalytics(activeProject.id, period)
+          setAnalytics(data)
+        } else {
+          const data = await analyticsService.getAdminAnalytics(period as any)
+          setAnalytics(data)
+        }
+        setError(null)
+      } catch (err) {
+        console.error('Failed to load analytics:', err)
+        setError('Failed to load analytics data')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchData()
+  }, [period])
+
+  const submissionsByDate = analytics?.submissionsByDate
+    ? analyticsService.transformSubmissionData(analytics.submissionsByDate)
+    : []
+
+  const teamMetrics = analytics?.teamMetrics
+    ? analyticsService.transformTeamData(
+        analytics.teamMetrics.map((t: any) => ({ team: t.name, completion: t.team_submissions || 0, team_size: t.team_size || 0 }))
+      )
+    : []
+
+  const zoneData = analytics?.zonesPerformance?.map((z: any) => ({
+    zone: z.name,
+    hours: z.submissions || 0,
+    agents: Math.round((z.submissions || 0) / 5) + 1,
+  })) || []
+
+  const topPerformers = teamMetrics
+    .sort((a: any, b: any) => b.submissions - a.submissions)
+    .slice(0, 5)
+    .map((t: any, i: number) => ({
+      name: t.name,
+      team: t.name,
+      submissions: t.submissions,
+      rate: t.size > 0 ? `${Math.round(t.submissions / t.size)}/day` : 'N/A',
+      color: AGENT_COLORS[i % AGENT_COLORS.length],
+    }))
+
+  const totalSubmissions = submissionsByDate.reduce((a: number, d: any) => a + d.total, 0)
+  const approvedSubmissions = submissionsByDate.reduce((a: number, d: any) => a + d.approved, 0)
+  const coveragePct = analytics?.project?.target_submissions > 0
+    ? Math.round((totalSubmissions / analytics.project.target_submissions) * 100)
+    : 0
+
+  const coveragePie = [
+    { name: 'Covered', value: Math.min(100, coveragePct), color: 'hsl(var(--primary))' },
+    { name: 'Remaining', value: Math.max(0, 100 - coveragePct), color: 'hsl(var(--muted))' },
+  ]
 
   return (
     <>
@@ -99,13 +120,29 @@ export default function SupervisorAnalyticsPage() {
             </Select>
           </div>
 
+          {isLoading && (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Loading analytics...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-destructive/10 text-destructive p-4 rounded-lg flex items-center gap-3">
+              <XCircle className="h-5 w-5" />
+              <p>{error}</p>
+            </div>
+          )}
+
+          {!isLoading && !error && (
+          <>
           {/* KPI Row */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: 'Total Submissions', value: '292', change: '+48 this week', icon: ClipboardList, color: 'text-primary', bg: 'bg-primary/10' },
-              { label: 'Coverage Progress', value: '67%', change: '+12% this week', icon: MapPin, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-              { label: 'Avg. Daily Agents', value: '36', change: 'of 42 members', icon: Users, color: 'text-chart-2', bg: 'bg-chart-2/10' },
-              { label: 'Avg. Time per Zone', value: '114h', change: 'total field hours', icon: Clock, color: 'text-chart-3', bg: 'bg-chart-3/10' },
+              { label: 'Total Submissions', value: totalSubmissions, icon: ClipboardList, color: 'text-primary', bg: 'bg-primary/10' },
+              { label: 'Coverage Progress', value: `${coveragePct}%`, icon: MapPin, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+              { label: 'Teams Active', value: teamMetrics.length, icon: Users, color: 'text-chart-2', bg: 'bg-chart-2/10' },
+              { label: 'Project Target', value: analytics?.project?.target_submissions || 0, icon: Clock, color: 'text-chart-3', bg: 'bg-chart-3/10' },
             ].map(s => (
               <Card key={s.label}>
                 <CardContent className="p-5">
@@ -116,7 +153,6 @@ export default function SupervisorAnalyticsPage() {
                   </div>
                   <p className="text-3xl font-bold">{s.value}</p>
                   <p className="text-sm text-muted-foreground">{s.label}</p>
-                  <p className="text-xs text-primary mt-1">{s.change}</p>
                 </CardContent>
               </Card>
             ))}
@@ -127,29 +163,25 @@ export default function SupervisorAnalyticsPage() {
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle>Submission Trend</CardTitle>
-                <CardDescription>Daily form submissions and active agent count</CardDescription>
+                <CardDescription>Daily form submissions</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailySubmissions}>
+                    <AreaChart data={submissionsByDate}>
                       <defs>
                         <linearGradient id="gSub" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
                           <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                         </linearGradient>
-                        <linearGradient id="gAgents" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
-                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                      <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                       <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                       <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
                       <Legend />
-                      <Area type="monotone" dataKey="submissions" name="Submissions" stroke="hsl(var(--primary))" fill="url(#gSub)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="agents" name="Active Agents" stroke="hsl(var(--chart-2))" fill="url(#gAgents)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="total" name="Submissions" stroke="hsl(var(--primary))" fill="url(#gSub)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="approved" name="Approved" stroke="hsl(var(--chart-2))" fillOpacity={0} strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -172,21 +204,21 @@ export default function SupervisorAnalyticsPage() {
                   </ResponsiveContainer>
                 </div>
                 <div className="text-center -mt-2">
-                  <p className="text-3xl font-bold">67%</p>
-                  <p className="text-xs text-muted-foreground">of target area</p>
+                  <p className="text-3xl font-bold">{coveragePct}%</p>
+                  <p className="text-xs text-muted-foreground">of target</p>
                 </div>
                 <div className="mt-4 space-y-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Zones Completed</span>
-                    <span className="font-medium">1 / 12</span>
+                    <span className="text-muted-foreground">Total Submissions</span>
+                    <span className="font-medium">{totalSubmissions}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Zones Active</span>
-                    <span className="font-medium">5 / 12</span>
+                    <span className="text-muted-foreground">Approved</span>
+                    <span className="font-medium">{approvedSubmissions}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Zones Pending</span>
-                    <span className="font-medium">6 / 12</span>
+                    <span className="text-muted-foreground">Teams</span>
+                    <span className="font-medium">{teamMetrics.length}</span>
                   </div>
                 </div>
               </CardContent>
@@ -197,20 +229,20 @@ export default function SupervisorAnalyticsPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Team Submissions vs Target</CardTitle>
-                <CardDescription>How each team is performing against their targets</CardDescription>
+                <CardTitle>Team Submissions</CardTitle>
+                <CardDescription>How teams are performing</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={teamSubmissions}>
+                    <BarChart data={teamMetrics}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="team" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                      <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                       <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                       <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
                       <Legend />
                       <Bar dataKey="submissions" name="Submissions" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="target" name="Target" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="coverage" name="Coverage %" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -219,61 +251,64 @@ export default function SupervisorAnalyticsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Team Radar Comparison</CardTitle>
-                <CardDescription>Multi-dimensional performance for top 3 teams</CardDescription>
+                <CardTitle>Zone Activity</CardTitle>
+                <CardDescription>Submissions by zone</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={teamRadar}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="subject" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9 }} />
-                      <Radar name="Alpha" dataKey="Alpha" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.15} />
-                      <Radar name="Beta" dataKey="Beta" stroke="hsl(var(--chart-2))" fill="hsl(var(--chart-2))" fillOpacity={0.15} />
-                      <Radar name="Gamma" dataKey="Gamma" stroke="hsl(var(--chart-3))" fill="hsl(var(--chart-3))" fillOpacity={0.15} />
-                      <Legend />
-                    </RadarChart>
+                    <BarChart data={zoneData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                      <YAxis dataKey="zone" type="category" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} width={80} />
+                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
+                      <Bar dataKey="hours" name="Submissions" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Top Agents */}
+          {/* Top Teams */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-primary" /> Top Performers
+                <Award className="h-5 w-5 text-primary" /> Top Teams
               </CardTitle>
-              <CardDescription>Most active field agents this period</CardDescription>
+              <CardDescription>Teams by submission count</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {topAgents.map((agent, i) => (
-                  <div key={agent.name} className="flex items-center gap-4">
+                {topPerformers.map((team: any, i: number) => (
+                  <div key={team.name} className="flex items-center gap-4">
                     <span className="text-2xl font-bold text-muted-foreground w-6 text-center">{i + 1}</span>
                     <Avatar className="h-9 w-9">
-                      <AvatarFallback style={{ backgroundColor: agent.color + '20', color: agent.color }} className="text-xs">
-                        {agent.name.split(' ').map(n => n[0]).join('')}
+                      <AvatarFallback style={{ backgroundColor: team.color + '20', color: team.color }} className="text-xs">
+                        {team.name.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{agent.name}</p>
-                      <p className="text-xs text-muted-foreground">{agent.team} · {agent.rate}</p>
+                      <p className="font-medium text-sm">{team.name}</p>
+                      <p className="text-xs text-muted-foreground">{team.size || 0} members · {team.rate}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-sm">{agent.submissions}</p>
+                      <p className="font-bold text-sm">{team.submissions}</p>
                       <p className="text-xs text-muted-foreground">submissions</p>
                     </div>
                     <div className="w-24">
-                      <Progress value={agent.submissions / topAgents[0].submissions * 100} className="h-1.5" />
+                      <Progress value={topPerformers[0]?.submissions > 0 ? (team.submissions / topPerformers[0].submissions) * 100 : 0} className="h-1.5" />
                     </div>
                   </div>
                 ))}
+                {topPerformers.length === 0 && (
+                  <p className="text-center text-muted-foreground text-sm py-8">No team data available yet.</p>
+                )}
               </div>
             </CardContent>
           </Card>
+          </>
+          )}
 
         </div>
       </main>

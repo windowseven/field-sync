@@ -1,10 +1,11 @@
 'use client'
 
+import { use } from 'react'
 import * as React from 'react'
 import {
   Plus, Search, MoreHorizontal, Users, MapPin,
   TrendingUp, UserPlus, Trash2, Settings, UserMinus,
-  UsersRound, CheckCircle2,
+  UsersRound, CheckCircle2, Loader2, XCircle,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,65 +27,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-
-const teams = [
-  {
-    id: '1', name: 'Team Alpha', color: 'bg-chart-1', zone: 'Zone A - Downtown',
-    status: 'active' as const, progress: 79,
-    leader: { name: 'Sarah Johnson', email: 'sarah.j@survey.co' },
-    members: [
-      { name: 'Kwame Asante', status: 'active' as const, submissions: 43 },
-      { name: 'Tewodros Bekele', status: 'active' as const, submissions: 19 },
-      { name: 'Lena Mugo', status: 'idle' as const, submissions: 12 },
-      { name: 'Ibrahim Diallo', status: 'offline' as const, submissions: 8 },
-    ],
-    tasksCompleted: 45, tasksPending: 12,
-  },
-  {
-    id: '2', name: 'Team Beta', color: 'bg-chart-2', zone: 'Zone C - Westlands',
-    status: 'active' as const, progress: 68,
-    leader: { name: 'James Kariuki', email: 'james.k@survey.co' },
-    members: [
-      { name: 'Fatima Ndiaye', status: 'offline' as const, submissions: 31 },
-      { name: 'Amina Sesay', status: 'active' as const, submissions: 27 },
-      { name: 'Osei Mensah', status: 'active' as const, submissions: 14 },
-    ],
-    tasksCompleted: 38, tasksPending: 18,
-  },
-  {
-    id: '3', name: 'Team Gamma', color: 'bg-chart-3', zone: 'Zone E - Eastlands',
-    status: 'active' as const, progress: 55,
-    leader: { name: 'Amara Diallo', email: 'amara.d@survey.co' },
-    members: [
-      { name: 'Ngozi Adeyemi', status: 'offline' as const, submissions: 4 },
-      { name: 'Sule Bah', status: 'idle' as const, submissions: 18 },
-      { name: 'Yvonne Cherono', status: 'active' as const, submissions: 22 },
-    ],
-    tasksCompleted: 29, tasksPending: 14,
-  },
-  {
-    id: '4', name: 'Team Delta', color: 'bg-chart-4', zone: 'Zone F - Kasarani',
-    status: 'idle' as const, progress: 50,
-    leader: { name: 'Chioma Obi', email: 'chioma.o@survey.co' },
-    members: [
-      { name: 'Victor Eze', status: 'idle' as const, submissions: 11 },
-      { name: 'Blessing Okeke', status: 'active' as const, submissions: 9 },
-      { name: 'Halima Juma', status: 'offline' as const, submissions: 2 },
-    ],
-    tasksCompleted: 22, tasksPending: 22,
-  },
-  {
-    id: '5', name: 'Team Echo', color: 'bg-chart-5', zone: 'Zone H - Kibera',
-    status: 'active' as const, progress: 64,
-    leader: { name: 'Mwangi Njoroge', email: 'mwangi.n@survey.co' },
-    members: [
-      { name: 'Aisha Diop', status: 'idle' as const, submissions: 15 },
-      { name: 'Kojo Acheampong', status: 'active' as const, submissions: 28 },
-      { name: 'Seun Adeyemi', status: 'active' as const, submissions: 18 },
-    ],
-    tasksCompleted: 18, tasksPending: 10,
-  },
-]
+import { teamService } from '@/lib/api/teamService'
 
 const statusColors = {
   active: { dot: 'bg-emerald-500', label: 'Active', badge: 'bg-emerald-500/10 text-emerald-500' },
@@ -92,15 +35,66 @@ const statusColors = {
   paused: { dot: 'bg-muted-foreground', label: 'Paused', badge: 'bg-muted text-muted-foreground' },
 }
 
-const memberStatus = {
+const memberStatus: Record<string, string> = {
   active: 'bg-emerald-500',
   idle: 'bg-amber-500',
   offline: 'bg-muted-foreground',
 }
 
-export default function SupervisorTeamsPage() {
+interface TeamData {
+  id: string
+  name: string
+  color: string
+  zone: string
+  status: 'active' | 'idle' | 'paused'
+  progress: number
+  leader: { name: string; email: string }
+  members: Array<{ name: string; status: 'active' | 'idle' | 'offline'; submissions: number }>
+  tasksCompleted: number
+  tasksPending: number
+}
+
+export default function SupervisorTeamsPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = use(params)
   const [search, setSearch] = React.useState('')
   const [createOpen, setCreateOpen] = React.useState(false)
+  const [teams, setTeams] = React.useState<TeamData[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
+
+  React.useEffect(() => {
+    const fetchTeams = async () => {
+      setIsLoading(true)
+      try {
+        const projectTeams = await teamService.getByProject(projectId)
+        const transformed = projectTeams.map((team: any, index: number) => ({
+          id: team.id,
+          name: team.name,
+          color: chartColors[index % chartColors.length],
+          zone: team.zone?.name || 'Unassigned',
+          status: team.status === 'active' ? 'active' as const : team.status === 'paused' ? 'paused' as const : 'idle' as const,
+          progress: Math.round((team.tasks_completed || 0) / ((team.tasks_completed || 0) + (team.tasks_pending || 1)) * 100),
+          leader: { name: team.leader?.name || 'Unassigned', email: team.leader?.email || '' },
+          members: (team.members || []).map((m: any) => ({
+            name: m.name,
+            status: m.status === 'active' ? 'active' as const : m.status === 'offline' ? 'offline' as const : 'idle' as const,
+            submissions: m.submissions || 0,
+          })),
+          tasksCompleted: team.tasks_completed || 0,
+          tasksPending: team.tasks_pending || 0,
+        }))
+        setTeams(transformed)
+        setError(null)
+      } catch {
+        setError('Failed to load teams')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchTeams()
+  }, [projectId])
 
   const filtered = teams.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -167,13 +161,29 @@ export default function SupervisorTeamsPage() {
             </Dialog>
           </div>
 
+          {isLoading && (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Loading teams...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-destructive/10 text-destructive p-4 rounded-lg flex items-center gap-3">
+              <XCircle className="h-5 w-5" />
+              <p>{error}</p>
+            </div>
+          )}
+
+          {!isLoading && !error && (
+          <>
           {/* Summary */}
           <div className="grid gap-4 sm:grid-cols-4">
             {[
               { label: 'Total Teams', value: teams.length, icon: UsersRound, color: 'text-primary', bg: 'bg-primary/10' },
               { label: 'Active Teams', value: teams.filter(t => t.status === 'active').length, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
               { label: 'Total Members', value: teams.reduce((acc, t) => acc + t.members.length + 1, 0), icon: Users, color: 'text-chart-2', bg: 'bg-chart-2/10' },
-              { label: 'Avg. Progress', value: `${Math.round(teams.reduce((acc, t) => acc + t.progress, 0) / teams.length)}%`, icon: TrendingUp, color: 'text-chart-3', bg: 'bg-chart-3/10' },
+              { label: 'Avg. Progress', value: teams.length > 0 ? `${Math.round(teams.reduce((acc, t) => acc + t.progress, 0) / teams.length)}%` : '0%', icon: TrendingUp, color: 'text-chart-3', bg: 'bg-chart-3/10' },
             ].map(s => (
               <Card key={s.label}>
                 <CardContent className="p-4 flex items-center gap-3">
@@ -286,6 +296,8 @@ export default function SupervisorTeamsPage() {
               </Card>
             ))}
           </div>
+          </>
+          )}
 
         </div>
       </main>

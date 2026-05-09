@@ -25,6 +25,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { invitationService, CreateInviteLinkParams, SendEmailInviteParams } from '@/lib/api/invitationService'
+import { teamService } from '@/lib/api/teamService'
+import { projectService, ApiProject } from '@/lib/api/projectService'
 
 interface InviteLink {
   id: string
@@ -65,6 +67,7 @@ export default function InvitationsPage() {
   const [newMaxUses, setNewMaxUses] = React.useState('10')
   const [newExpiresIn, setNewExpiresIn] = React.useState('7')
 
+  const [teams, setTeams] = React.useState<{ id: string; name: string }[]>([])
   const [inviteLinks, setInviteLinks] = React.useState<InviteLink[]>([])
   const [pendingInvites, setPendingInvites] = React.useState<PendingInvite[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
@@ -97,10 +100,18 @@ export default function InvitationsPage() {
         setIsLoading(true)
         setError(null)
 
-        const [links, invites] = await Promise.all([
+        const [links, invites, fetchedTeams] = await Promise.all([
           invitationService.getInviteLinks(),
           invitationService.getEmailInvites(),
+          projectService.getAll(),
         ])
+
+        const allTeams: { id: string; name: string }[] = []
+        for (const proj of fetchedTeams) {
+          const projTeams = await teamService.getByProject(proj.id)
+          allTeams.push(...projTeams.map((t: any) => ({ id: t.id, name: t.name })))
+        }
+        setTeams(allTeams)
 
         setInviteLinks(links.map(invitationService.transformInviteLink))
         setPendingInvites(invites.map(invitationService.transformEmailInvite))
@@ -258,14 +269,16 @@ export default function InvitationsPage() {
                     <Label>Assign to Team</Label>
                     <Select value={newTeam} onValueChange={setNewTeam}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select team..." />
+                        <SelectValue placeholder={teams.length === 0 ? 'No teams available' : 'Select team...'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="alpha">Team Alpha</SelectItem>
-                        <SelectItem value="beta">Team Beta</SelectItem>
-                        <SelectItem value="gamma">Team Gamma</SelectItem>
-                        <SelectItem value="delta">Team Delta</SelectItem>
-                        <SelectItem value="echo">Team Echo</SelectItem>
+                        {teams.length === 0 ? (
+                          <SelectItem value="" disabled>No teams available</SelectItem>
+                        ) : (
+                          teams.map((t) => (
+                            <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -428,11 +441,15 @@ export default function InvitationsPage() {
                           <div className="space-y-2">
                             <Label>Assign to Team</Label>
                             <Select value={inviteTeam} onValueChange={setInviteTeam}>
-                              <SelectTrigger><SelectValue placeholder="Select team..." /></SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder={teams.length === 0 ? 'No teams available' : 'Select team...'} /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="alpha">Team Alpha</SelectItem>
-                                <SelectItem value="beta">Team Beta</SelectItem>
-                                <SelectItem value="gamma">Team Gamma</SelectItem>
+                                {teams.length === 0 ? (
+                                  <SelectItem value="" disabled>No teams available</SelectItem>
+                                ) : (
+                                  teams.map((t) => (
+                                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                  ))
+                                )}
                               </SelectContent>
                             </Select>
                           </div>

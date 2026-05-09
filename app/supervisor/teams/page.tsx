@@ -181,9 +181,10 @@ export default function SupervisorTeamsPage() {
                     <Select>
                       <SelectTrigger><SelectValue placeholder="Select a team leader" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="sarah">Sarah Johnson</SelectItem>
-                        <SelectItem value="james">James Kariuki</SelectItem>
-                        <SelectItem value="amara">Amara Diallo</SelectItem>
+                        {[...new Set(teams.map(t => t.leader.name).filter(Boolean))].map(name => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                        {teams.length === 0 && <SelectItem value="none" disabled>No leaders available</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
@@ -192,9 +193,10 @@ export default function SupervisorTeamsPage() {
                     <Select>
                       <SelectTrigger><SelectValue placeholder="Select a zone" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="zoneB">Zone B - Nairobi West</SelectItem>
-                        <SelectItem value="zoneD">Zone D - Lang'ata</SelectItem>
-                        <SelectItem value="zoneG">Zone G - Embakasi</SelectItem>
+                        {[...new Set(teams.map(t => t.zone).filter(Boolean))].map(zone => (
+                          <SelectItem key={zone} value={zone}>{zone}</SelectItem>
+                        ))}
+                        {teams.length === 0 && <SelectItem value="none" disabled>No zones available</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
