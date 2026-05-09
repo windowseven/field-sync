@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -39,6 +40,7 @@ export default function LoginPage() {
   } = useLogin();
 
   const redirectMessage = useAuthRedirect();
+  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,6 +51,7 @@ export default function LoginPage() {
     password?: string;
   }>({});
   const [touched, setTouched] = useState({ email: false, password: false });
+  const [verifyEmail, setVerifyEmail] = useState("");
 
   const emailRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +72,12 @@ export default function LoginPage() {
     setFormErrors(visible);
   }, [email, password, touched]);
 
+  useEffect(() => {
+    if (error && /verify.*email|email.*verif/i.test(error)) {
+      setVerifyEmail(email);
+    }
+  }, [error, email]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("[Login] handleSubmit called, isLockedOut:", isLockedOut);
@@ -81,6 +90,7 @@ export default function LoginPage() {
       return;
     }
     console.log("[Login] Calling login with email:", email.trim());
+    setVerifyEmail("");
     await login({ email: email.trim(), password, rememberMe });
   };
 
@@ -133,7 +143,17 @@ export default function LoginPage() {
         {error && !isLockedOut && (
           <Alert variant="destructive" className="py-3">
             <AlertCircle className="h-3.5 w-3.5" />
-            <AlertDescription className="text-xs ml-1">{error}</AlertDescription>
+            <AlertDescription className="text-xs ml-1">
+              {error}
+              {/verify.*email|email.*verif/i.test(error) && verifyEmail && (
+                <button
+                  onClick={() => router.push(`/verify-otp?context=registration&email=${encodeURIComponent(verifyEmail)}`)}
+                  className="block mt-2 text-sm font-medium text-destructive underline hover:no-underline"
+                >
+                  Verify email now
+                </button>
+              )}
+            </AlertDescription>
           </Alert>
         )}
 
