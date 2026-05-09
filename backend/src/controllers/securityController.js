@@ -217,14 +217,12 @@ async function getSecuritySessions(threats) {
       login.timestamp AS login_at
     FROM users u
     LEFT JOIN user_locations ul ON ul.user_id = u.id
-    LEFT JOIN audit_logs login ON login.id = (
-      SELECT al.id
-      FROM audit_logs al
-      WHERE al.user_id = u.id
-        AND al.action = 'user.login'
-      ORDER BY al.timestamp DESC, al.id DESC
-      LIMIT 1
-    )
+    LEFT JOIN (
+      SELECT id, user_id, ip_address, user_agent, timestamp,
+        ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY timestamp DESC, id DESC) AS rn
+      FROM audit_logs
+      WHERE action = 'user.login'
+    ) login ON login.user_id = u.id AND login.rn = 1
     WHERE u.status IN ('online', 'idle')
        OR u.last_seen >= DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY FIELD(u.status, 'online', 'idle', 'offline'), u.last_seen DESC
