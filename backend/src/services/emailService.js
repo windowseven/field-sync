@@ -21,6 +21,7 @@ function escapeHtml(str) {
 
 function getFromAddress() {
   if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
+  if (process.env.BREVO_API_KEY) return process.env.EMAIL_USER || 'noreply@field-sync.com';
   if (process.env.SENDGRID_API_KEY) return process.env.EMAIL_USER || 'noreply@field-sync.com';
   if (process.env.RESEND_API_KEY) return 'onboarding@resend.dev';
   return process.env.EMAIL_USER || 'noreply@field-sync.com';
@@ -44,6 +45,27 @@ async function sendViaResend({ to, subject, html }) {
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Resend API error (${res.status}): ${body}`);
+  }
+}
+
+async function sendViaBrevo({ to, subject, html }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { email: getFromAddress() },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo API error (${res.status}): ${body}`);
   }
 }
 
@@ -137,7 +159,9 @@ async function sendViaSmtp({ to, subject, html }) {
 }
 
 async function sendEmail({ to, subject, html }) {
-  if (process.env.SENDGRID_API_KEY) {
+  if (process.env.BREVO_API_KEY) {
+    await sendViaBrevo({ to, subject, html });
+  } else if (process.env.SENDGRID_API_KEY) {
     await sendViaSendGrid({ to, subject, html });
   } else if (process.env.RESEND_API_KEY) {
     await sendViaResend({ to, subject, html });
