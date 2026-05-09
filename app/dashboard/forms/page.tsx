@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   FileSearch, Plus, Search, MoreHorizontal, Eye, Copy, Pencil,
-  Trash2, Download, CheckCircle2, Clock, Globe, Lock, FileText,
+  Trash2, Download, CheckCircle2, Clock, Globe, Lock, FileText, Loader2, XCircle,
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,58 +17,81 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { http } from '@/lib/api/httpClient'
 
-const templates = [
-  {
-    id: 'tpl-001', name: 'Household Survey', category: 'Census', fields: 18, steps: 4,
-    description: 'Comprehensive household data collection including demographics, income, and utilities.',
-    usedBy: 5, status: 'published', access: 'global', created: 'Jan 2026', updatedAt: '2 days ago',
-  },
-  {
-    id: 'tpl-002', name: 'Evangelism Visit Record', category: 'Outreach', fields: 12, steps: 3,
-    description: 'Records household spiritual status, interest level, and follow-up notes.',
-    usedBy: 3, status: 'published', access: 'global', created: 'Feb 2026', updatedAt: '1 week ago',
-  },
-  {
-    id: 'tpl-003', name: 'Health Screening Form', category: 'Healthcare', fields: 22, steps: 5,
-    description: 'Basic health indicators, chronic conditions, and referral assessment.',
-    usedBy: 2, status: 'published', access: 'global', created: 'Feb 2026', updatedAt: '3 days ago',
-  },
-  {
-    id: 'tpl-004', name: 'Business Enumeration', category: 'Economic', fields: 15, steps: 3,
-    description: 'Captures business type, employees, revenue range, and registration status.',
-    usedBy: 1, status: 'published', access: 'global', created: 'Mar 2026', updatedAt: '5 days ago',
-  },
-  {
-    id: 'tpl-005', name: 'Infrastructure Assessment', category: 'Urban Planning', fields: 20, steps: 4,
-    description: 'Road conditions, utilities access, waste management, and public facilities.',
-    usedBy: 0, status: 'draft', access: 'global', created: 'Apr 2026', updatedAt: 'Today',
-  },
-  {
-    id: 'tpl-006', name: 'Youth Program Registration', category: 'Community', fields: 10, steps: 2,
-    description: 'Youth participant details, parent consent, and program preferences.',
-    usedBy: 2, status: 'published', access: 'global', created: 'Mar 2026', updatedAt: '4 days ago',
-  },
-]
+interface FormTemplate {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  created_at: string;
+  fields: number;
+  steps: number;
+  usedBy: number;
+  category: string;
+}
 
-const categoryColors: Record<string, string> = {
-  Census: 'bg-blue-500/10 text-blue-500',
-  Outreach: 'bg-primary/10 text-primary',
-  Healthcare: 'bg-emerald-500/10 text-emerald-500',
-  Economic: 'bg-amber-500/10 text-amber-500',
-  'Urban Planning': 'bg-purple-500/10 text-purple-500',
-  Community: 'bg-pink-500/10 text-pink-500',
+function parseFormSchema(schema: any): { fields: number; steps: number } {
+  try {
+    const parsed = typeof schema === 'string' ? JSON.parse(schema) : schema;
+    if (Array.isArray(parsed)) {
+      const steps = parsed.length;
+      const fields = parsed.reduce((acc: number, step: any) => {
+        return acc + (Array.isArray(step.fields) ? step.fields.length : 0);
+      }, 0);
+      return { fields, steps };
+    }
+  } catch {}
+  return { fields: 0, steps: 0 };
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
 function FormsPageContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const [templates, setTemplates] = useState<FormTemplate[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(searchParams.get('create') === '1')
   const [newName, setNewName] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const [newDesc, setNewDesc] = useState('')
+
+  useEffect(() => {
+    const fetchForms = async () => {
+      setIsLoading(true);
+      try {
+        const res = await http.get<{ status: string; data: { forms: any[] } }>('/forms');
+        const mapped: FormTemplate[] = res.data.forms.map((f: any) => {
+          const { fields, steps } = parseFormSchema(f.form_schema);
+          return {
+            id: f.id,
+            title: f.title,
+            description: f.description || '',
+            status: f.status || 'draft',
+            created_at: f.created_at,
+            fields,
+            steps,
+            usedBy: 0,
+            category: 'Form',
+          };
+        });
+        setTemplates(mapped);
+        setError(null);
+      } catch {
+        setError('Failed to load form templates');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchForms();
+  }, [])
 
   useEffect(() => {
     setCreateOpen(searchParams.get('create') === '1')
@@ -89,8 +112,7 @@ function FormsPageContent() {
   }
 
   const filtered = templates.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    t.category.toLowerCase().includes(search.toLowerCase())
+    t.title.toLowerCase().includes(search.toLowerCase())
   )
 
   const published = templates.filter(t => t.status === 'published').length
@@ -128,22 +150,13 @@ function FormsPageContent() {
                     <Input placeholder="e.g. Household Survey" value={newName} onChange={(e) => setNewName(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Category</Label>
-                    <Select value={newCategory} onValueChange={setNewCategory}>
-                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                      <SelectContent>
-                        {Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
                     <Label>Description</Label>
                     <Textarea placeholder="Describe what this form collects..." rows={3} value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className="resize-none" />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => updateCreateOpen(false)}>Cancel</Button>
-                  <Button onClick={() => updateCreateOpen(false)} disabled={!newName || !newCategory}>
+                  <Button onClick={() => updateCreateOpen(false)} disabled={!newName}>
                     Create as Draft
                   </Button>
                 </DialogFooter>
@@ -175,13 +188,31 @@ function FormsPageContent() {
             ))}
           </div>
 
+          {/* Loading & Error */}
+          {isLoading && (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Loading form templates...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-destructive/10 text-destructive p-4 rounded-lg flex items-center gap-3">
+              <XCircle className="h-5 w-5" />
+              <p>{error}</p>
+            </div>
+          )}
+
           {/* Search */}
+          {!isLoading && !error && (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search templates by name or category..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input placeholder="Search templates by name..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          )}
 
           {/* Templates Grid */}
+          {!isLoading && !error && (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((t) => (
               <Card key={t.id} className="hover:border-primary/40 transition-colors group">
@@ -189,15 +220,12 @@ function FormsPageContent() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <Badge variant="secondary" className={categoryColors[t.category] ?? 'bg-muted text-muted-foreground'}>
-                          {t.category}
-                        </Badge>
                         <Badge variant="secondary" className={t.status === 'published' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}>
                           {t.status === 'published' ? <Globe className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
                           {t.status}
                         </Badge>
                       </div>
-                      <CardTitle className="text-base">{t.name}</CardTitle>
+                      <CardTitle className="text-base">{t.title}</CardTitle>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -233,15 +261,16 @@ function FormsPageContent() {
                     ))}
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border">
-                    <span>Created {t.created}</span>
-                    <span>Updated {t.updatedAt}</span>
+                    <span>Created {formatDate(t.created_at)}</span>
+                    <span>From database</span>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
+          )}
 
-          {filtered.length === 0 && (
+          {!isLoading && !error && filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <FileSearch className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="font-medium">No templates found</p>

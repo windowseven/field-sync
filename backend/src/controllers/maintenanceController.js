@@ -581,3 +581,77 @@ export const getMaintenanceSnapshot = async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Failed to load maintenance metrics' });
   }
 };
+
+function classifyAlertLevel(action = '', detail = {}) {
+  if (action === 'auth.login.failed') return 'critical';
+  if (action === 'user.register') return 'info';
+  if (action === 'project.create' || action === 'project.update') return 'info';
+  if (action === 'user.update' || action === 'user.delete') return 'warning';
+  if (detail?.status === 429 || detail?.status === 503) return 'critical';
+  if (detail?.status === 401 || detail?.status === 403) return 'warning';
+  return 'info';
+}
+
+function alertIcon(level) {
+  const icons = { critical: 'AlertCircle', warning: 'Clock', success: 'CheckCircle2', info: 'Info' };
+  return icons[level] || 'Info';
+}
+
+const ALERT_ACTIONS = ['auth.login.failed', 'user.register', 'user.update', 'user.delete', 'project.create'];
+
+export const getAlerts = async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT id, action, detail, ip_address, user_id, target_name, timestamp
+      FROM audit_logs
+      WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        AND (${ALERT_ACTIONS.map(() => 'action = ?').join(' OR ')})
+      ORDER BY timestamp DESC
+      LIMIT 50
+    `, ALERT_ACTIONS);
+
+    const rateLimitSnapshot = (await import('../utils/rateLimitMetrics.js')).getRateLimitSnapshot();
+    const rateLimitAlerts = (rateLimitSnapshot.recentBlocks || []).slice(0, 10).map((b, i) => ({
+      id: `rl-${i}`,
+      type: 'critical',
+      title: 'Rate Limit Triggered',
+      description: `IP ${b.ip || 'unknown'} hit rate limit on ${b.name || 'unknown'} endpoint`,
+      timestamp: new Date(b.timestamp || Date.now()),
+      icon: alertIcon('critical'),
+      read: false,
+    }));
+
+    const dbAlerts = rows.map((row) => {
+      let detail = {};
+      try { detail = typeof row.detail === 'string' ? JSON.parse(row.detail) : (row.detail || {}); } catch {}
+      const level = classifyAlertLevel(row.action, detail);
+      const titles = {
+        'auth.login.failed': 'Failed Login Attempt',
+        'user.register': 'New User Registered',
+        'user.update': 'User Profile Updated',
+        'user.delete': 'User Account Removed',
+        'project.create': 'New Project Created',
+      };
+      return {
+        id: `db-${row.id}`,
+        type: level,
+        title: titles[row.action] || row.action,
+        description: row.target_name
+          ? `${titles[row.action] || 'Event'} — ${row.target_name}`
+          : titles[row.action] || 'System event recorded',
+        timestamp: new Date(row.timestamp),
+        icon: alertIcon(level),
+        read: false,
+      };
+    });
+
+    const all = [...rateLimitAlerts, ...dbAlerts]
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, 50);
+
+    res.json({ status: 'success', data: all });
+  } catch (error) {
+    logger.error(`Get alerts error: ${error.message}`);
+    res.status(500).json({ status: 'error', message: 'Failed to load alerts' });
+  }
+};

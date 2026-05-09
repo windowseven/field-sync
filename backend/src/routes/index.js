@@ -204,6 +204,11 @@ router.post('/invitations/emails/:id/resend', authenticateToken, authorizeRole([
 router.delete('/invitations/emails/:id', authenticateToken, authorizeRole(['admin', 'supervisor']), invitationController.deleteEmailInvite);
 
 // ══════════════════════════════════════════════════════════════
+// ALERTS (admin only)
+// ══════════════════════════════════════════════════════════════
+router.get('/alerts', authenticateToken, authorizeRole(['admin']), maintenanceController.getAlerts);
+
+// ══════════════════════════════════════════════════════════════
 // EMERGENCY CONTROLS (admin only)
 // ══════════════════════════════════════════════════════════════
 router.get('/emergency/snapshot', authenticateToken, authorizeRole(['admin']), configurationController.getEmergencySnapshot);
