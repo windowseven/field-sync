@@ -211,6 +211,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!res.ok) {
           const errorData = await res.json().catch(() => null);
+          if (res.status === 403 && errorData?.code === 'EMAIL_NOT_VERIFIED') {
+            dispatch({ type: 'CLEAR_ERROR' });
+            router.push(`/verify-otp?context=registration&email=${encodeURIComponent(credentials.email)}`);
+            return;
+          }
           throw new Error(
             errorData?.message ||
               errorData?.data?.message ||
