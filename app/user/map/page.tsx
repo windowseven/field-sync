@@ -33,7 +33,11 @@ type ApiLocation = {
 
 export default function UserMapPage() {
   const { data: profileData, error: profileError } = useSWR('/auth/profile', fetcher)
-  const { data: teamData, error: teamError } = useSWR('/team/members', fetcher)
+  const { data: teamData, error: teamError } = useSWR('/team/members', fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    shouldRetryOnError: false,
+  })
 
   const [zones, setZones] = useState<MapZone[]>([])
   const [locations, setLocations] = useState<ApiLocation[]>([])

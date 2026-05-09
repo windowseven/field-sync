@@ -38,7 +38,7 @@ export default function FormsPage() {
     activeProjectId ? activeProjectId : null,
     () => formService.getByProject(activeProjectId)
   )
-  const { data: teamData } = useSWR('/team/my/members', fetcher)
+  const { data: teamData } = useSWR('/team/my/members', fetcher, { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false })
   const [selectedForm, setSelectedForm] = useState<FormRow | null>(null)
   const [filter, setFilter] = useState<'all' | 'submitted' | 'pending-review' | 'draft'>('all')
   const [fillingMode, setFillingMode] = useState<'individual' | 'group'>('individual')

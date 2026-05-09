@@ -208,7 +208,7 @@ export const getTeamMembers = async (req, res) => {
     const [teamRows] = await pool.query('SELECT id FROM teams WHERE leader_id = ?', [req.user.id]);
     const team = teamRows[0];
     
-    if (!team) return res.status(404).json({ status: 'error', message: 'No team assigned' });
+    if (!team) return res.json({ status: 'success', data: { members: [] } });
 
     const [rows] = await pool.query(
       `SELECT u.id, u.name, u.email, u.status, u.avatar, u.last_seen 
@@ -240,7 +240,7 @@ export const getMyTeamMembers = async (req, res) => {
 
     const team = teamRows[0];
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'You are not assigned to a team' });
+      return res.json({ status: 'success', data: { team: null, members: [] } });
     }
 
     const memberMap = new Map();

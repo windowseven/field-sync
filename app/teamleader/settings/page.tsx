@@ -25,8 +25,8 @@ function formatDuration(totalSeconds: number): string {
 
 export default function SettingsPage() {
   const { data: profileData, error: profileError } = useSWR('/auth/profile', fetcher)
-  const { data: teamData } = useSWR('/team/my/members', fetcher)
-  const { data: statsData } = useSWR('/team/stats', fetcher)
+  const { data: teamData } = useSWR('/team/my/members', fetcher, { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false })
+  const { data: statsData } = useSWR('/team/stats', fetcher, { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false })
 
   const [sessionActive, setSessionActive] = useState(false)
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
