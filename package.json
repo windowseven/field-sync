@@ -1,0 +1,9 @@
+{
+  "name": "fieldsync-monorepo",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix field-sync && npm install --prefix field-sync/backend",
+    "build": "npm run build --prefix field-sync",
+    "start": "npm start --prefix field-sync/backend"
+  }
+}

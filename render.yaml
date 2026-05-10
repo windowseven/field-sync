@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: fieldsync-web
+    env: node
+    rootDir: field-sync
+    buildCommand: rm -f .env && npm install --include=dev && npm run build && npm install --prefix backend
+    startCommand: npm start --prefix backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: TIDB_ENABLE_SSL
+        value: "true"
+      - key: TIDB_USER_PREFIX
+        sync: false
+      - key: DB_USER_PREFIX
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CSRF_SECRET
+        generateValue: true
+      - key: NODE_OPTIONS
+        value: --dns-result-order=ipv4first
+      - key: FRONTEND_URL
+        value: https://fieldsync-web.onrender.com
+      - key: NEXT_PUBLIC_API_URL
+        value: https://fieldsync-web.onrender.com/api/v1
+      - key: NEXT_PUBLIC_WS_URL
+        value: wss://fieldsync-web.onrender.com
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
