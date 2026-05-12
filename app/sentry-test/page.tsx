@@ -18,7 +18,8 @@ export default function SentryTestPage() {
                 action: 'test_error_button_click',
               })
               Sentry.metrics.count('test_counter', 1)
-              throw new Error('This is your first error!')
+              Sentry.captureException(new Error('This is your first error!'))
+              alert('Error sent to Sentry! Check your dashboard.')
             }}
             className="w-full px-4 py-3 bg-destructive text-destructive-foreground rounded-md font-medium hover:opacity-90"
           >
