@@ -5,8 +5,8 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "node --import ./src/instrument.js src/index.js",
+    "dev": "nodemon --node-args \"--import ./src/instrument.js\" src/index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose",
     "test:ci": "node --experimental-vm-modules node_modules/jest/bin/jest.js --ci",
     "seed": "node src/db/seed.js",

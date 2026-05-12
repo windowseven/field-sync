@@ -12,13 +12,15 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || 'development',
+    sendDefaultPii: true,
     enableLogs: true,
-    tracesSampleRate: 1.0,
+    includeLocalVariables: true,
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     profileSessionSampleRate: 1.0,
     profileLifecycle: 'trace',
-    sendDefaultPii: true,
     integrations: [
       nodeProfilingIntegration(),
+      Sentry.nodeRuntimeMetricsIntegration(),
     ],
   });
 }

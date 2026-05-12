@@ -1,4 +1,3 @@
-import './instrument.js';
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -10,7 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { setupWsServer } from './sockets/wsServer.js';
 
-// Load environment variables (instrument.js loads .env first for Sentry)
+// Load environment variables (instrument.js loaded via --import loads .env first)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
