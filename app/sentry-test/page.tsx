@@ -1,3 +1,5 @@
+'use client'
+
 import * as Sentry from '@sentry/react'
 
 export default function SentryTestPage() {
