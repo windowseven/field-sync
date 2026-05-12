@@ -72,11 +72,13 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https://*.gravatar.com", "https://*.googleusercontent.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
+      workerSrc: ["'self'", "blob:"],
       connectSrc: ["'self'",
         process.env.NODE_ENV === 'production'
           ? `wss://${new URL(FRONTEND_URL).hostname}`
           : `ws://localhost:${process.env.PORT || 5000}`,
         FRONTEND_URL,
+        "https://*.ingest.us.sentry.io",
       ],
       frameAncestors: ["'none'"],
     },
