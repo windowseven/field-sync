@@ -7,12 +7,14 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose",
+    "test:ci": "node --experimental-vm-modules node_modules/jest/bin/jest.js --ci",
     "seed": "node src/db/seed.js",
     "migrate-indexes": "node src/db/migrate-indexes.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -21,12 +23,14 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.9.7",
-    "next": "16.2.0",
+    "next": "^16.2.6",
     "nodemailer": "^8.0.5",
     "socket.io": "^4.7.5",
-    "uuid": "^13.0.0",
+    "uuid": "^13.0.2",
     "winston": "^3.13.0",
     "ws": "^8.17.0",
+    "@sentry/node": "^10.52.0",
+    "@sentry/profiling-node": "^10.52.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

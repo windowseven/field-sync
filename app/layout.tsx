@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/theme-provider'
+import { SentryProvider } from '@/components/providers/sentry-provider'
 import { AuthProvider } from '@/lib/auth/AuthContext'
 import { AuthErrorBoundary } from '@/components/features/auth/AuthErrorBoundary'
 import { InactivityWatcher } from '@/components/features/auth/InactivityWatcher'
@@ -48,6 +49,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+        <SentryProvider>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -63,6 +65,7 @@ export default function RootLayout({
             </AuthErrorBoundary>
           </AuthProvider>
         </ThemeProvider>
+        </SentryProvider>
       </body>
     </html>
   )

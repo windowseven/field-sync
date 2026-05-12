@@ -1,26 +1,4 @@
-<<<<<<< HEAD
 # FieldSync
-
-Real-time field operations management platform.
-
-## Project Structure
-
-```
-field-sync/
-├── frontend/          # Next.js 16 dashboard (Admin, Supervisor, Team Leader, Field Worker)
-├── backend/           # Node.js/Express REST API + WebSocket + MySQL
-└── package.json       # Root workspace scripts
-```
-
-## Quick Start
-
-### Install all dependencies
-
-```bash
-npm install          # Install root (concurrently)
-npm run install:all  # Install frontend + backend
-=======
-# FieldSync 
 
 FieldSync is a full-stack, real-time field operations management platform built with Next.js 16, Node.js/Express, and MySQL. It is designed for organizations running distributed field work such as surveys, census programs, outreach campaigns, inspections, evangelism tracking, and operational monitoring.
 
@@ -391,37 +369,22 @@ backend/
 ### Install dependencies
 
 ```bash
-# Frontend
-cd frontend
+# Install all dependencies (root + backend)
 npm install
-
-# Backend
-cd ../backend
-npm install
->>>>>>> 5d39e8afb23a42ad78c6ba37e974c849e7c6fcc4
+npm install --prefix backend
 ```
 
 ### Set up environment
 
 ```bash
-<<<<<<< HEAD
 # Backend
 cp backend/.env.example backend/.env
 # Edit backend/.env with your database credentials and email settings
-
-# Frontend (optional for dev)
-cp frontend/.env.example frontend/.env
-=======
-cd backend
-cp .env.example .env
-# Edit .env with your database credentials and email settings
->>>>>>> 5d39e8afb23a42ad78c6ba37e974c849e7c6fcc4
 ```
 
 ### Run database migrations
 
 ```bash
-<<<<<<< HEAD
 npm run migrate
 ```
 
@@ -437,7 +400,7 @@ This starts both frontend (`localhost:3000`) and backend (`localhost:5000`) conc
 
 ```bash
 npm run build
-npm run start        # Starts backend only (frontend must be deployed separately or built into backend)
+npm start
 ```
 
 ## Production Deployment
@@ -469,77 +432,19 @@ Deploy both on one server:
 | Script | Description |
 |--------|-------------|
 | `npm run dev` | Start both frontend + backend in dev mode |
-| `npm run build` | Build frontend + install backend deps |
-| `npm run start` | Start backend server (runs migrations automatically) |
+| `npm run build` | Build frontend (Next.js) |
+| `npm start` | Start backend server (runs migrations automatically) |
 | `npm run migrate` | Run database migrations manually |
 | `npm run seed` | Seed database with sample data |
 | `npm run install:all` | Install dependencies for root, frontend, and backend |
 | `npm run lint` | Run ESLint on frontend |
-
-## Tech Stack
-
-- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS 4, Recharts, Leaflet
-- **Backend**: Node.js, Express, MySQL 2, WebSocket (ws), Nodemailer, Zod, Helmet, JWT
-- **Database**: MySQL with migration system
+| `npm test --prefix backend` | Run backend unit tests |
 
 ## Environment Variables
 
-See `frontend/.env.example` and `backend/.env.example` for required variables.
+See `backend/.env.example` for required variables. On Render, secrets are managed through the dashboard.
 
 **Never commit `.env` files to version control.**
-
-## License
-
-No license declared. Add a license if the project is intended for public distribution.
-=======
-cd backend
-node src/db/migrate-indexes.js
-```
-
-### Start the development servers
-
-```bash
-# Backend (Terminal 1)
-cd backend
-npm run dev
-
-# Frontend (Terminal 2)
-cd frontend
-npm run dev
-```
-
-Open `http://localhost:3000`, then go to:
-
-```txt
-http://localhost:3000/landing
-http://localhost:3000/login
-http://localhost:3000/dashboard
-```
-
-### Production build
-
-```bash
-# Backend
-cd backend
-npm run build
-
-# Frontend
-cd frontend
-npm run build
-npm run start
-```
-
-## Available Scripts
-
-### Frontend
-- `npm run dev` - start the development server
-- `npm run build` - create a production build
-- `npm run start` - start the production server
-- `npm run lint` - run ESLint
-
-### Backend
-- `npm run dev` - start the development server
-- `npm run start` - start the production server
 
 ## Documentation
 
@@ -568,8 +473,8 @@ This repository includes supporting product and architecture documents:
 - Contact form submissions are wired to real backend endpoints.
 - Database migrations create the required tables.
 - CSRF protection, token refresh, inactivity timeout, and route guards enforce security.
+- 38 unit tests cover auth, CSRF, token blacklist, and security policy modules.
 
 ## License
 
 This project currently has no license declared in the repository. Add a license if the project is intended for public distribution.
->>>>>>> 5d39e8afb23a42ad78c6ba37e974c849e7c6fcc4

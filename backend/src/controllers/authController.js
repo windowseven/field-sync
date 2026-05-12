@@ -8,6 +8,7 @@ import { EmailDeliveryError, sendOtpEmail } from '../services/emailService.js';
 import { logAudit } from './auditLogController.js';
 import { getSecurityPolicies } from '../utils/securityPolicyStore.js';
 import { getPlatformControls } from '../utils/platformConfigStore.js';
+import { addToBlacklist } from '../utils/tokenBlacklist.js';
 
 // ─── Validation Schemas ─────────────────────────────────────
 function getPasswordSchema() {
@@ -71,7 +72,7 @@ function generateOtp() {
 function signAccessToken(user) {
   const { session } = getSecurityPolicies();
   return jwt.sign(
-    { userId: user.id, role: user.role, email: user.email },
+    { userId: user.id, role: user.role, email: user.email, jti: crypto.randomUUID(), type: 'access' },
     process.env.JWT_SECRET,
     { expiresIn: `${Math.max(1, Math.round(session.accessTokenExpiryHours))}h` }
   );
@@ -80,7 +81,7 @@ function signAccessToken(user) {
 function signRefreshToken(user) {
   const { session } = getSecurityPolicies();
   return jwt.sign(
-    { userId: user.id, type: 'refresh' },
+    { userId: user.id, jti: crypto.randomUUID(), type: 'refresh' },
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: `${Math.max(1, Math.round(session.refreshTokenExpiryDays))}d` }
   );
@@ -126,6 +127,12 @@ export const login = async (req, res) => {
     const user = rows[0];
 
     if (!user) {
+      await logAudit(null, 'login.failed', {
+        email,
+        ip: req.ip,
+        user_agent: req.get('User-Agent'),
+        reason: 'user_not_found',
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Invalid email or password',
@@ -134,6 +141,13 @@ export const login = async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
+      await logAudit(null, 'login.failed', {
+        email,
+        user_id: user.id,
+        ip: req.ip,
+        user_agent: req.get('User-Agent'),
+        reason: 'wrong_password',
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Invalid email or password',
@@ -218,6 +232,13 @@ export const refresh = async (req, res) => {
       return res.status(401).json({ status: 'error', message: 'Invalid token type' });
     }
 
+    // Blacklist the old refresh token (rotation)
+    if (decoded.jti) {
+      const { session } = getSecurityPolicies();
+      const ttlMs = session.refreshTokenExpiryDays * 24 * 60 * 60 * 1000;
+      addToBlacklist(decoded.jti, ttlMs);
+    }
+
     const [rows] = await pool.query('SELECT id, name, email, role FROM users WHERE id = ?', [decoded.userId]);
     const user = rows[0];
 
@@ -227,6 +248,11 @@ export const refresh = async (req, res) => {
 
     const token = signAccessToken(user);
     const newRefreshToken = signRefreshToken(user);
+
+    await logAudit(user.id, 'user.token_refresh', {
+      ip: req.ip,
+      user_agent: req.get('User-Agent'),
+    });
 
     res.json({
       status: 'success',
@@ -561,6 +587,37 @@ export const resetPassword = async (req, res) => {
     }
     logger.error('Reset password error:', error);
     res.status(500).json({ status: 'error', message: 'Reset failed' });
+  }
+};
+
+// ─── Logout ──────────────────────────────────────────────────
+export const logout = async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (token) {
+      try {
+        const decoded = jwt.decode(token);
+        if (decoded?.jti) {
+          const { session } = getSecurityPolicies();
+          const ttlMs = session.accessTokenExpiryHours * 60 * 60 * 1000;
+          addToBlacklist(decoded.jti, ttlMs);
+        }
+      } catch {
+        // Token decode failed, ignore
+      }
+    }
+
+    await logAudit(req.user?.id || null, 'user.logout', {
+      ip: req.ip,
+      user_agent: req.get('User-Agent'),
+    });
+
+    res.json({ status: 'success', message: 'Logged out successfully' });
+  } catch (error) {
+    logger.error('Logout error:', error);
+    res.status(500).json({ status: 'error', message: 'Logout failed' });
   }
 };
 

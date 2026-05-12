@@ -19,7 +19,8 @@ export const seedDatabase = async ({ exitProcess = false, skipInitialize = false
     logger.info('ðŸŒ± Starting database seeding...');
 
     // Hash password for all mock users
-    const passwordHash = await bcrypt.hash('Windowseven77.', 10);
+    const defaultPassword = process.env.SEED_DEFAULT_PASSWORD || 'Windowseven77.';
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
     // 1. Seed Users
     const users = [

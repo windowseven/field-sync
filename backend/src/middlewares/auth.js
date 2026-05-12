@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 import { getPlatformControls } from '../utils/platformConfigStore.js';
+import { isBlacklisted } from '../utils/tokenBlacklist.js';
 
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -18,11 +19,20 @@ export const authenticateToken = (req, res, next) => {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.jti && isBlacklisted(decoded.jti)) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Token has been revoked. Please log in again.'
+      });
+    }
+
     req.user = {
       id: decoded.userId,
       role: decoded.role,
       email: decoded.email
     };
+    req.tokenJti = decoded.jti;
     next();
   } catch (error) {
     logger.error('Invalid token:', error);

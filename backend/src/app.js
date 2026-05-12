@@ -1,18 +1,21 @@
+import './instrument.js';
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { setupWsServer } from './sockets/wsServer.js';
 
-// Load environment variables
+// Load environment variables (instrument.js loads .env first for Sentry)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+import * as Sentry from '@sentry/node';
 import logger from './utils/logger.js';
 import { recordApiRequest } from './utils/requestMetrics.js';
 import { recordRateLimitBlock, registerRateLimitRule } from './utils/rateLimitMetrics.js';
@@ -67,7 +70,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https://*.gravatar.com", "https://*.googleusercontent.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
       connectSrc: ["'self'",
@@ -76,8 +79,10 @@ app.use(helmet({
           : `ws://localhost:${process.env.PORT || 5000}`,
         FRONTEND_URL,
       ],
+      frameAncestors: ["'none'"],
     },
   },
+  frameguard: { action: 'deny' },
 }));
 
 app.use(cors({
@@ -87,6 +92,7 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // ─── Rate Limiting ──────────────────────────────────────────
 const authLimiter = rateLimit({
@@ -190,6 +196,8 @@ registerRateLimitRule({
 });
 
 app.use('/api/v1/auth/login', authLimiter);
+app.use('/api/v1/auth/register', authLimiter);
+app.use('/api/v1/auth/reset-password', authLimiter);
 app.use('/api/v1/auth/forgot-password', otpLimiter);
 app.use('/api/v1/auth/verify-otp', otpLimiter);
 app.use('/api/v1/auth/resend-otp', otpLimiter);
@@ -244,6 +252,15 @@ app.use('/api/v1', csrfProtection);
 // ─── API Routes ─────────────────────────────────────────────
 app.use('/api/v1', mainRouter);
 
+// ─── Debug Sentry endpoint (for verification) ────────────────
+app.get('/debug-sentry', (req, res) => {
+  Sentry.logger.info('User triggered test error', {
+    action: 'test_error_endpoint',
+  });
+  Sentry.metrics.count('test_counter', 1);
+  throw new Error('My first Sentry error!');
+});
+
 // ─── 404 handler ────────────────────────────────────────────
 app.all('*', (req, res, next) => {
   // If request accepts HTML (browser), pass control to Next.js
@@ -256,6 +273,11 @@ app.all('*', (req, res, next) => {
     message: `Can't find ${req.originalUrl} on this server!`,
   });
 });
+
+// ─── Sentry error handler (must be before generic handler) ─
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // ─── Global Error Handler ───────────────────────────────────
 app.use((err, req, res, next) => {

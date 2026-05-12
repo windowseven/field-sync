@@ -50,12 +50,13 @@ function validateCsrfToken(token) {
 export const csrfTokenEndpoint = (req, res) => {
   const token = generateCsrfToken();
 
-  // Also set as a readable cookie (for SPA convenience)
+  // HttpOnly cookie prevents third-party scripts from reading the token.
+  // The SPA reads the token from the JSON response body instead.
   const isHttps = req.protocol === 'https';
   res.cookie('XSRF-TOKEN', token, {
-    httpOnly: false, // Client needs to read this
+    httpOnly: true,
     secure: isHttps,
-    sameSite: 'Lax',
+    sameSite: 'Strict',
     maxAge: TOKEN_EXPIRY_MS,
     path: '/',
   });

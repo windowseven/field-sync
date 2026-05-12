@@ -49,3 +49,7 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false

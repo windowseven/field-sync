@@ -36,6 +36,7 @@ router.post('/auth/forgot-password', authController.forgotPassword);
 router.post('/auth/verify-otp', authController.verifyOtp);
 router.post('/auth/reset-password', authController.resetPassword);
 router.post('/auth/resend-otp', authController.resendOtp);
+router.post('/auth/logout', authenticateToken, authController.logout);
 
 // ══════════════════════════════════════════════════════════════
 // CONTACT (public)
