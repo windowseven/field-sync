@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 
 import { analyticsService, ProjectAnalytics } from '@/lib/api/analyticsService'
 import { useParams } from 'next/navigation'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 
 export default function AnalyticsPage() {
   const { projectId } = useParams() as { projectId: string }

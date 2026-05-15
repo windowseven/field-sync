@@ -19,7 +19,7 @@ import * as dashboardController from '../controllers/dashboardController.js';
 import * as analyticsController from '../controllers/analyticsController.js';
 import * as maintenanceController from '../controllers/maintenanceController.js';
 import * as securityController from '../controllers/securityController.js';
-import * as configurationController from '../controllers/configurationController.js';
+
 import * as contactController from '../controllers/contactController.js';
 import { authenticateToken, authorizeRole, enforcePlatformControls } from '../middlewares/auth.js';
 import { validate, schemas } from '../middlewares/validationMiddleware.js';
@@ -212,14 +212,14 @@ router.get('/alerts', authenticateToken, authorizeRole(['admin']), maintenanceCo
 // ══════════════════════════════════════════════════════════════
 // EMERGENCY CONTROLS (admin only)
 // ══════════════════════════════════════════════════════════════
-router.get('/emergency/snapshot', authenticateToken, authorizeRole(['admin']), configurationController.getEmergencySnapshot);
-router.post('/emergency/control', authenticateToken, authorizeRole(['admin']), configurationController.updateEmergencyControl);
-router.post('/emergency/shutdown', authenticateToken, authorizeRole(['admin']), configurationController.requestEmergencyShutdown);
+router.get('/emergency/snapshot', authenticateToken, authorizeRole(['admin']), emergencyController.getEmergencySnapshot);
+router.post('/emergency/control', authenticateToken, authorizeRole(['admin']), emergencyController.updateEmergencyControl);
+router.post('/emergency/shutdown', authenticateToken, authorizeRole(['admin']), emergencyController.requestEmergencyShutdown);
 
 // ══════════════════════════════════════════════════════════════
 // BROADCASTS (admin only)
 // ══════════════════════════════════════════════════════════════
-router.get('/broadcasts', authenticateToken, authorizeRole(['admin']), configurationController.getBroadcastSnapshot);
-router.post('/broadcasts', authenticateToken, authorizeRole(['admin']), configurationController.createBroadcast);
+router.get('/broadcasts', authenticateToken, authorizeRole(['admin']), broadcastController.getBroadcastSnapshot);
+router.post('/broadcasts', authenticateToken, authorizeRole(['admin']), broadcastController.createBroadcast);
 
 export default router;

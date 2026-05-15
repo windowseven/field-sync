@@ -25,7 +25,7 @@ type Task = {
 // Mock data removed
 
 import { taskService, type ApiTask } from '@/lib/api/taskService'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 
 export default function TasksPage() {
   const [openTaskDialog, setOpenTaskDialog] = useState(false)

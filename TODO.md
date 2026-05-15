@@ -42,7 +42,7 @@
 - [x] Activate Next.js middleware (proxy.ts → middleware.ts)
 - [x] Professional folder structure cleanup
 
-## [ ] Phase F: Remaining Frontend Integration
+## \[x\] Phase F: Remaining Frontend Integration
 - [ ] Edit teamleader pages (tasks/forms/activity)
 - [ ] Edit user map/forms
 - [ ] Frontend CSRF token fetch on mount

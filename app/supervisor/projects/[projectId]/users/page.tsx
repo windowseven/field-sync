@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 
 import { projectService } from '@/lib/api/projectService'
 import { useParams } from 'next/navigation'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 
 interface ProjectUser {
   id: string

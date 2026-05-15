@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { fieldSyncSocket } from '@/lib/auth/socketManager'
 import { auditService, type ApiAuditLog, type FrontendAuditLog } from '@/lib/api/auditService'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = React.useState<FrontendAuditLog[]>([])

@@ -22,7 +22,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { projectService, type ApiProject } from '@/lib/api/projectService'
 import { useParams, useRouter } from 'next/navigation'
-import { toast } from '@/components/ui/use-toast'
+import { toast } from '@/hooks/use-toast'
 
 export default function ProjectSettingsPage() {
   const { projectId } = useParams() as { projectId: string }

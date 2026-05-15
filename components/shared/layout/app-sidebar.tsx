@@ -341,7 +341,7 @@ export function AppSidebar() {
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">{user?.name || 'System Admin'}</span>
-                    <span className="truncate text-xs text-muted-foreground">{user?.email || 'lespikiusjunior@gmail.com'}</span>
+                    <span className="truncate text-xs text-muted-foreground">{user?.email || user?.name?.split(' ')[0]?.toLowerCase() + '@fieldsync.com' || 'user@fieldsync.com'}</span>
                   </div>
                   <ChevronDown className="ml-auto h-4 w-4 shrink-0" />
                 </SidebarMenuButton>
