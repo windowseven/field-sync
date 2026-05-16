@@ -88,6 +88,10 @@ const INDEXES = [
     INDEX idx_status_created (status, created_at DESC),
     INDEX idx_email (email)
   )`,
+  'CREATE INDEX idx_user_locations_updated ON user_locations(updated_at DESC)',
+  'CREATE INDEX idx_invite_links_expires ON invite_links(expires_at)',
+  'CREATE INDEX idx_email_invites_expires ON email_invites(expires_at)',
+  'CREATE INDEX idx_user_location_history_recorded ON user_location_history(recorded_at DESC)',
 ];
 
 export const runMigration = async () => {

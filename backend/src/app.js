@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { setupWsServer } from './sockets/wsServer.js';
+import { setupWsServer, getConnectedClientsSnapshot } from './sockets/wsServer.js';
 
 // Load environment variables (instrument.js loaded via --import loads .env first)
 const __filename = fileURLToPath(import.meta.url);
@@ -16,6 +16,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import * as Sentry from '@sentry/node';
 import logger from './utils/logger.js';
+import { requestId } from './utils/requestId.js';
 import { recordApiRequest } from './utils/requestMetrics.js';
 import { recordRateLimitBlock, registerRateLimitRule } from './utils/rateLimitMetrics.js';
 import { getSecurityPolicies } from './utils/securityPolicyStore.js';
@@ -63,6 +64,9 @@ app.set('trust proxy', 1);
 
 // Raw WebSocket server (used by frontend socketManager.ts)
 setupWsServer(httpServer);
+
+// ─── Request ID (first middleware for tracing) ──────────────
+app.use(requestId);
 
 // ─── Middlewares ─────────────────────────────────────────────
 app.use(helmet({
@@ -209,6 +213,7 @@ app.use('/api/v1/invitations/email/validate', inviteValidationLimiter);
 // ─── Request logging ────────────────────────────────────────
 app.use((req, res, next) => {
   const startedAt = Date.now();
+  const reqId = req.id;
 
   res.on('finish', () => {
     const durationMs = Date.now() - startedAt;
@@ -219,8 +224,9 @@ app.use((req, res, next) => {
       status: res.statusCode,
       durationMs,
       ip: req.ip,
+      requestId: reqId,
     });
-    logger.http(`${req.method} ${req.originalUrl} -> ${res.statusCode} (${durationMs}ms)`);
+    logger.http(`[${reqId}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${durationMs}ms)`);
   });
 
   next();
@@ -228,20 +234,36 @@ app.use((req, res, next) => {
 
 // ─── Basic Routes ───────────────────────────────────────────
 app.get('/health', async (req, res) => {
+  let dbOk = false;
   try {
     await checkConnection();
-    res.status(200).json({
-      status: 'OK',
-      database: 'Connected',
-      timestamp: new Date().toISOString(),
-    });
+    dbOk = true;
   } catch {
-    res.status(503).json({
-      status: 'Service Unavailable',
-      database: 'Disconnected',
-      timestamp: new Date().toISOString(),
-    });
+    dbOk = false;
   }
+
+  const wsSnapshot = getConnectedClientsSnapshot();
+  const overall = dbOk ? 'OK' : 'Service Unavailable';
+
+  res.status(dbOk ? 200 : 503).json({
+    status: overall,
+    database: dbOk ? 'Connected' : 'Disconnected',
+    websocket: {
+      connected: wsSnapshot.total,
+      byRole: wsSnapshot.byRole,
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/health/ws', (req, res) => {
+  const snapshot = getConnectedClientsSnapshot();
+  res.json({
+    status: 'OK',
+    connected: snapshot.total,
+    byRole: snapshot.byRole,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ─── CSRF token endpoint (must be before CSRF protection) ───
@@ -282,19 +304,32 @@ if (process.env.SENTRY_DSN) {
 
 // ─── Global Error Handler ───────────────────────────────────
 app.use((err, req, res, next) => {
-  const statusCode = err.statusCode || 500;
-  const status = err.status || 'error';
+  const reqId = req?.id || '-';
+  let statusCode = err.statusCode || 500;
+  let message = err.message || 'Internal Server Error';
+  let code = err.code;
 
-  logger.error(`${err.name}: ${err.message}`);
-  if (err.stack) logger.debug(err.stack);
-  // Fallback: always write to stderr so Render logs capture it
-  console.error(`${new Date().toISOString()} [${err.name}] ${err.message}`);
-  if (err.stack) console.error(err.stack);
+  // Handle Zod validation errors from asyncHandler
+  if (err.name === 'ZodError') {
+    statusCode = 400;
+    message = err.issues.map(i => i.message).join('; ');
+  }
+
+  const level = statusCode >= 500 ? 'error' : 'warn';
+  logger[level](`[${reqId}] ${err.name}: ${err.message}`);
+  if (err.stack && statusCode >= 500) logger.debug(err.stack);
+  if (statusCode >= 500) {
+    console.error(`${new Date().toISOString()} [${err.name}] ${err.message}`);
+    if (err.stack) console.error(err.stack);
+  }
 
   res.status(statusCode).json({
-    status,
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    status: statusCode >= 500 ? 'error' : 'fail',
+    ...(code ? { code } : {}),
+    message: statusCode >= 500 && process.env.NODE_ENV === 'production'
+      ? 'Internal Server Error'
+      : message,
+    ...(process.env.NODE_ENV === 'development' && err.stack ? { stack: err.stack } : {}),
   });
 });
 
