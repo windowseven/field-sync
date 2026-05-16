@@ -69,7 +69,7 @@ field-sync/
     services/     → emailService.js
     sockets/      → wsServer.js (custom WebSocket, 267 lines)
     utils/        → tokenBlacklist, securityPolicy, logger, rateLimitMetrics
-    __tests__/    → 4 test files, 38 tests total
+    __tests__/    → **5 test files, 51 tests total**
 ```
 
 **Strengths:**
@@ -79,8 +79,9 @@ field-sync/
 - ✅ Stateless backend design enables horizontal scaling (except in-memory stores)
 
 **Weaknesses:**
-- ⚠️ `authController.js` (644 lines) still violates SRP — handles login, register, refresh, forgot-password, verify-otp, reset-password, logout, resend-otp. Should be split into: `authController.js`, `otpController.js`, `passwordController.js`
-- ⚠️ No service layer — business logic lives in controllers. Example: `register()` at authController.js:272-488 handles: invite validation, transaction management, user creation, OTP generation, audit logging, and error recovery in one monolithic function
+- ✅ `authController.js` — **Refactored** from 644 to 497 lines using `asyncHandler` wrapper: removed all try/catch boilerplate, replaced inline error responses with `AppError` throws, standardized error handling across all 7 controller functions
+- ⚠️ Still violates SRP — handles login, register, refresh, etc. in one file. Should be split into: `authController.js`, `otpController.js`, `passwordController.js`
+- ⚠️ No service layer — business logic lives in controllers
 - ⚠️ `startServer()` in index.js:15-56 mixes concerns: DB init → index migration → Next.js init → HTTP start. If DB init fails, frontend never deploys
 
 ---
@@ -283,26 +284,31 @@ const blacklist = new Map(); // Line 5 — In-Memory
 ```
 Lost on restart; not shared across instances. **Acceptable for single-instance deployment.**
 
-### 5.4 Error Handling
+### 5.4 Error Handling ✅ IMPROVED
 
-**Evidence from `app.js:284-299`:**
+**State after fix:**
+- ✅ **`asyncHandler` wrapper** created at `src/utils/asyncHandler.js` — catches async errors and automatically responds with `res.status().json()`
+- ✅ **`AppError` class** created at `src/utils/AppError.js` — enables `throw new AppError('message', 401, 'CODE')` instead of manual error responses
+- ✅ **`authController.js` fully refactored** — all 7 functions use `asyncHandler` + `AppError`, eliminating all try/catch blocks
+- ✅ **Global error handler** updated at `app.js:284-299` — now handles `AppError` (statusCode + code), `ZodError` (400 with validation messages), and regular errors
+- ✅ **Request ID** included in error log messages for distributed tracing
+
+**Evidence from current `asyncHandler.js`:**
 ```js
-app.use((err, req, res, next) => {
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
-    status,
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-  });
-});
+export function asyncHandler(fn) {
+  return (req, res, next) => {
+    return Promise.resolve(fn(req, res, next)).catch((error) => {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ status: 'error', message: error.errors[0].message });
+      }
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ status: 'error', message: ... });
+    });
+  };
+}
 ```
-- ✅ Clean production/development split (no stack traces leaked in production)
-- ✅ Sentry integration before generic handler (app.js:279-281)
-- ✅ Consistent response shape: `{ status, data/message }`
-- ✅ All async controllers wrapped in try/catch with Zod error distinction
 
-**Weakness:** No centralized async error wrapper — every controller has duplicated try/catch boilerplate.  
-**Recommendation:** Create an `asyncHandler` wrapper function to reduce boilerplate in controllers.
+**Remaining weakness:** Some controllers still use raw try/catch patterns instead of `asyncHandler`. Future work should propagate the pattern to all controllers.
 
 ### 5.5 WebSocket Architecture
 
@@ -428,11 +434,11 @@ The token is validated but the password strength is validated via Zod schema. **
 
 ---
 
-## 8. Testing Quality Review
+## 8. Testing Quality Review ✅ IMPROVED
 
 ### 8.1 Test Coverage
 
-**4 test suites, 38 tests total:**
+**5 test suites, 51 tests total (+13 integration tests added):**
 
 | Suite | Tests | Coverage Area |
 |-------|-------|---------------|
@@ -440,15 +446,17 @@ The token is validated but the password strength is validated via Zod schema. **
 | `securityPolicyStore.test.mjs` | 9 | Duration parsing, defaults, edge cases |
 | `csrf.test.mjs` | 11 | Token generation, cookie attributes, header/cookie validation, exempt paths |
 | `auth.test.mjs` | 11 | No token, malformed token, valid token, blacklisted JTI, expired token, role authorization |
+| `authEndpoints.test.mjs` | **13** | **Login (401/200/403), Register (409/201/403), ForgotPassword, ResendOtp, Logout, Refresh (400/200), VerifyOtp, ResetPassword** |
 
 **Test Quality: Good**
 - ✅ Tests use isolated environment variables (`process.env.JWT_SECRET` backup/restore)
 - ✅ No external dependencies (mock HTTP/res/req objects)
 - ✅ Edge cases covered (empty token, malformed token, expired token, blacklisted JTI)
 - ✅ Role authorization tests cover single/multi-role allow, deny, and missing user
+- ✅ **Integration tests added** for all 9 auth controller endpoints using `jest.unstable_mockModule` for ESM module mocking
+- ✅ Black-box testing approach: calls controller functions directly with mocked database/email/logging dependencies
 
-**Gap:** No integration tests for actual controller endpoints. Auth controller login/register flows are untested at the HTTP level.  
-**Recommendation:** Add integration tests with a test database or mocks for the auth endpoint flows.
+**Remaining gap:** No E2E tests with a real database. Integration tests use mocked `pool.query()` — they verify logic flow but not SQL correctness.
 
 ---
 
