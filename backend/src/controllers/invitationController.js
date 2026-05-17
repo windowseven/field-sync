@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { sendInviteEmail } from '../services/emailService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
+import { validateInviteWithResponse } from '../services/inviteService.js';
 
 const generateId = () => crypto.randomUUID();
 
@@ -41,63 +42,9 @@ export const createInviteLink = asyncHandler(async (req, res) => {
 
 export const validateInviteCode = asyncHandler(async (req, res) => {
     const { code } = req.params;
-
-    let connection;
-    try {
-      connection = await pool.getConnection();
-      await connection.beginTransaction();
-
-      const [rows] = await connection.query(
-        `SELECT il.*, u.name as created_by_name 
-         FROM invite_links il 
-         LEFT JOIN users u ON il.created_by = u.id 
-         WHERE il.code = ? FOR UPDATE`,
-        [code]
-      );
-
-      if (rows.length === 0) {
-        await connection.rollback();
-        throw new AppError('Invalid invitation code', 404);
-      }
-
-      const invite = rows[0];
-
-      if (invite.status === 'deleted') {
-        await connection.rollback();
-        throw new AppError('This invitation has been revoked', 400);
-      }
-
-      if (new Date(invite.expires_at) < new Date()) {
-        await connection.query('UPDATE invite_links SET status = "expired" WHERE id = ?', [invite.id]);
-        await connection.commit();
-        throw new AppError('This invitation has expired', 400);
-      }
-
-      if (invite.status === 'maxed' || invite.uses >= invite.max_uses) {
-        if (invite.status !== 'maxed') {
-          await connection.query('UPDATE invite_links SET status = "maxed" WHERE id = ?', [invite.id]);
-        }
-        await connection.commit();
-        throw new AppError('This invitation has reached its usage limit', 400);
-      }
-
-      await connection.commit();
-
-      res.json({
-        status: 'success',
-        data: {
-          code: invite.code,
-          role: invite.role,
-          team: invite.team,
-          expiresAt: invite.expires_at,
-          createdBy: invite.created_by_name,
-          remainingUses: invite.max_uses - invite.uses,
-        },
-      });
-    } finally {
-      if (connection) connection.release();
-    }
-});
+    const data = await validateInviteWithResponse(code);
+    res.json({ status: 'success', data });
+  });
 
 export const regenerateInviteLink = asyncHandler(async (req, res) => {
     const { id } = req.params;

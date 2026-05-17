@@ -150,6 +150,7 @@ router.get('/projects/:projectId/teams', authenticateToken, authorizeRole(['admi
 // USERS
 // ══════════════════════════════════════════════════════════════
 router.get('/users/dashboard/stats', authenticateToken, userController.getDashboardStats);
+router.get('/users/session', authenticateToken, userController.getSession);
 router.post('/users/session', authenticateToken, userController.updateSession);
 router.get('/users', authenticateToken, userController.getAllUsers);
 router.get('/users/:id', authenticateToken, userController.getUserById);

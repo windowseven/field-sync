@@ -5,12 +5,10 @@ import crypto from 'crypto';
 import { logAudit } from './auditLogController.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
+import { paginate } from '../services/paginationService.js';
 
-// ─── Get All Users ──────────────────────────────────────────
 export const getAllUsers = asyncHandler(async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page || '1', 10));
-  const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = paginate(req.query.page, req.query.limit, 200);
   const roleFilter = req.query.role || null;
   const search = req.query.search || null;
 
@@ -254,6 +252,23 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 });
 
 // ─── Update Session ─────────────────────────────────────────
+// ─── Get Session Status ─────────────────────────────────────
+export const getSession = asyncHandler(async (req, res) => {
+  const [rows] = await pool.query(
+    'SELECT status, session_started_at FROM users WHERE id = ?',
+    [req.user.id]
+  );
+  const sessionData = rows[0] ? {
+    status: rows[0].status,
+    startedAt: rows[0].session_started_at,
+  } : { status: 'offline', startedAt: null };
+
+  res.json({
+    status: 'success',
+    data: { session: sessionData },
+  });
+});
+
 export const updateSession = asyncHandler(async (req, res) => {
   const { status } = req.body;
 

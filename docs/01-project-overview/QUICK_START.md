@@ -210,13 +210,13 @@ For deeper context, continue with:
 
 - [README.md](./README.md)
 - [PROJECT DOCUMENTATION.md](./PROJECT%20DOCUMENTATION.md)
-- [ADMIN DASHBOARD UPDATED.md](./ADMIN%20DASHBOARD%20UPDATED.md)
-- [SUPERVISOR DASHBOARD.md](./SUPERVISOR%20DASHBOARD.md)
-- [TEAMLEADER DASHBOARD.md](./TEAMLEADER%20DASHBOARD.md)
-- [USER DASHBOARD.md](./USER%20DASHBOARD.md)
+- [ADMIN DASHBOARD UPDATED.md](../04-admin-dashboard/ADMIN%20DASHBOARD%20UPDATED.md)
+- [SUPERVISOR DASHBOARD.md](../05-supervisor-dashboard/SUPERVISOR%20DASHBOARD.md)
+- [TEAMLEADER DASHBOARD.md](../06-team-leader-dashboard/TEAMLEADER%20DASHBOARD.md)
+- [USER DASHBOARD.md](../07-field-worker-dashboard/USER%20DASHBOARD.md)
 - [MODULE OUTLINE.md](./MODULE%20OUTLINE.md)
-- [SYSTEM MAINTAINANCE FEATURES.md](./SYSTEM%20MAINTAINANCE%20FEATURES.md)
-- [INDEX.md](./INDEX.md)
+- [SYSTEM MAINTAINANCE FEATURES.md](../08-maintenance/SYSTEM%20MAINTAINANCE%20FEATURES.md)
+- [INDEX.md](../INDEX.md)
 
 ## 10. Fastest Meaningful Walkthrough
 
@@ -227,7 +227,7 @@ If you want the quickest way to understand the full product:
 3. Open `/supervisor` to see the project-level Supervisor layer
 4. Open `/teamleader` to see the execution coordination layer
 5. Open `/user` to see the field worker layer
-6. Compare [ADMIN DASHBOARD UPDATED.md](./ADMIN%20DASHBOARD%20UPDATED.md) with [SUPERVISOR DASHBOARD.md](./SUPERVISOR%20DASHBOARD.md)
-7. Check [USER DASHBOARD.md](./USER%20DASHBOARD.md) for the field worker experience
+6. Compare [ADMIN DASHBOARD UPDATED.md](../04-admin-dashboard/ADMIN%20DASHBOARD%20UPDATED.md) with [SUPERVISOR DASHBOARD.md](../05-supervisor-dashboard/SUPERVISOR%20DASHBOARD.md)
+7. Check [USER DASHBOARD.md](../07-field-worker-dashboard/USER%20DASHBOARD.md) for the field worker experience
 
 That gives you the clearest view of the complete four-role architecture: Admin owns the platform, Supervisor owns project execution, Team Leader coordinates execution, and Field Worker performs tasks.

@@ -10,6 +10,7 @@ export interface SyncItem {
   retries: number;
   error?: string;
   size: string;
+  lastAttemptAt?: string;
 }
 
 export interface CachedTask {

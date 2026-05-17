@@ -1,94 +1,85 @@
 # FieldSync Documentation Index
 
-This index reflects the current state of the repository as of May 2026.
+All documentation has been organized into topic-based subdirectories. Use this index to navigate.
 
-## Implementation Status
+## Part 1: Project Overview — [01-project-overview/](./01-project-overview/)
 
-- Landing Page (`/landing`) ✅
-- Auth Pages (`/login`, `/register`, `/verify-otp`, `/forgot-password`, `/reset-password`) ✅
-- Company Pages (About, Careers, Contact, Blog, FAQ, Privacy, Terms, Cookies) ✅
-- Admin Dashboard (`/dashboard`) ✅
-- Supervisor Dashboard (`/supervisor`) ✅ (with Workspace/Project context)
-- Team Leader Dashboard (`/teamleader`) ✅
-- Field Worker Frontend (`/user`) ✅
-- Backend API (Node.js/Express + MySQL) ✅
-- Real-time WebSocket support ✅
-- Email notifications ✅
-- CSRF protection + security middleware ✅
+| File | Description |
+|------|-------------|
+| [README.md](./01-project-overview/README.md) | Full project readme — vision, scope, tech stack, routes, API, security, deployment |
+| [PROJECT DOCUMENTATION.md](./01-project-overview/PROJECT%20DOCUMENTATION.md) | Product vision, delivery phases, implementation strategy |
+| [QUICK_START.md](./01-project-overview/QUICK_START.md) | Fastest way to run the app and tour all dashboards |
+| [MODULE OUTLINE.md](./01-project-overview/MODULE%20OUTLINE.md) | Broader platform module breakdown (30 modules) |
 
-## Start Here
+## Part 2: Architecture & Technical Review — [02-architecture/](./02-architecture/)
 
-- [README.md](./README.md) — Overall repository scope, current status, route summary, and project structure.
-- [QUICK_START.md](./QUICK_START.md) — Fastest way to run the app and tour all dashboards.
-- [PROJECT DOCUMENTATION.md](./PROJECT%20DOCUMENTATION.md) — Product vision, role model, delivery phases, and architecture.
+| File | Description |
+|------|-------------|
+| [TECHNICAL_INSPECTION_REPORT.md](./02-architecture/TECHNICAL_INSPECTION_REPORT.md) | Full codebase inspection — algorithms, DB, security, performance |
+| [ENGINEERING_REVIEW.md](./02-architecture/ENGINEERING_REVIEW.md) | Engineering review — strengths, weaknesses, findings |
+| [SCALABILITY.md](./02-architecture/SCALABILITY.md) | Scalability analysis and forecast |
+| [DASHBOARD_IMPLEMENTATION.md](./02-architecture/DASHBOARD_IMPLEMENTATION.md) | Technical structure and implementation details |
+| [DASHBOARD.md](./02-architecture/DASHBOARD.md) | General dashboard notes and component guide |
 
-## Role-Specific Docs
+## Part 3: Security — [03-security/](./03-security/)
 
-- [ADMIN DASHBOARD UPDATED.md](./ADMIN%20DASHBOARD%20UPDATED.md) — Admin responsibilities, permissions, and system-level boundaries.
-- [SUPERVISOR DASHBOARD.md](./SUPERVISOR%20DASHBOARD.md) — Supervisor responsibilities, project-level visibility, and operational boundaries.
-- [TEAMLEADER DASHBOARD.md](./TEAMLEADER%20DASHBOARD.md) — Team Leader execution coordination and team management.
-- [USER DASHBOARD.md](./USER%20DASHBOARD.md) — Field Worker task execution, form submission, and offline workflows.
+| File | Description |
+|------|-------------|
+| [SECURITY_AUDIT.md](./03-security/SECURITY_AUDIT.md) | Full security architecture assessment |
+| [FRONTEND SECURITY FEATURES.md](./03-security/FRONTEND%20SECURITY%20FEATURES.md) | Frontend security layer documentation |
+| [AUTHORIZATION MODULE.md](./03-security/AUTHORIZATION%20MODULE.md) | Role-based access control and permission system |
+| [AUTHORIZATION PLAN.md](./03-security/AUTHORIZATION%20PLAN.md) | Authorization design and implementation plan |
+| [AUTH PAGES.md](./03-security/AUTH%20PAGES.md) | Authentication flow and page specifications |
 
-## Technical and Product Docs
+## Part 4: Admin Dashboard — [04-admin-dashboard/](./04-admin-dashboard/)
 
-- [DASHBOARD.md](./DASHBOARD.md) — General dashboard notes and implementation overview.
-- [DASHBOARD_IMPLEMENTATION.md](./DASHBOARD_IMPLEMENTATION.md) — Technical structure and implementation details.
-- [MODULE OUTLINE.md](./MODULE%20OUTLINE.md) — Broader platform module breakdown.
-- [SYSTEM MAINTAINANCE FEATURES.md](./SYSTEM%20MAINTAINANCE%20FEATURES.md) — System maintenance and reliability tooling.
-- [ADMIN_DASHBOARD_SUMMARY.md](./ADMIN_DASHBOARD_SUMMARY.md) — Summary of all dashboard surfaces.
-- [FRONTEND SECURITY FEATURES.md](./FRONTEND%20SECURITY%20FEATURES.md) — Frontend security layer documentation.
-- [AUTH PAGES.md](./AUTH%20PAGES.md) — Authentication flow and page specifications.
-- [AUTHORIZATION MODULE.md](./AUTHORIZATION%20MODULE.md) — Role-based access control and permission system.
+| File | Description |
+|------|-------------|
+| [ADMIN DASHBOARD UPDATED.md](./04-admin-dashboard/ADMIN%20DASHBOARD%20UPDATED.md) | Admin responsibilities, permissions, system-level boundaries |
+| [ADMIN_DASHBOARD_SUMMARY.md](./04-admin-dashboard/ADMIN_DASHBOARD_SUMMARY.md) | Summary of all dashboard surfaces |
 
-## Current Route Summary
+## Part 5: Supervisor Dashboard — [05-supervisor-dashboard/](./05-supervisor-dashboard/)
 
-Public routes:
-- `/landing` — Landing/marketing page
-- `/about`, `/careers`, `/contact`, `/blog`, `/faq` — Company information pages
-- `/privacy`, `/terms`, `/cookies` — Legal pages
-- `/login`, `/register`, `/verify-otp`, `/forgot-password`, `/reset-password` — Auth pages
+| File | Description |
+|------|-------------|
+| [SUPERVISOR DASHBOARD.md](./05-supervisor-dashboard/SUPERVISOR%20DASHBOARD.md) | Supervisor workspace + project dashboard architecture |
+| [SUPERVISOR DASHBOARD UPDATE [PROJECT CONTEXT].md](./05-supervisor-dashboard/SUPERVISOR%20DASHBOARD%20UPDATE%20%5BPROJECT%20CONTEXT%5D.md) | Project context update — dual-layer design |
 
-Admin routes:
-- `/dashboard` — System overview
-- `/dashboard/users`, `/dashboard/supervisors`, `/dashboard/projects`
-- `/dashboard/forms`, `/dashboard/tracking`, `/dashboard/analytics`
-- `/dashboard/audit`, `/dashboard/security`, `/dashboard/alerts`
-- `/dashboard/broadcast`, `/dashboard/settings`, `/dashboard/emergency`
-- `/dashboard/maintenance` (server, database, backup, errors, rate-limits, sync, storage, api, features, sandbox)
+## Part 6: Team Leader Dashboard — [06-team-leader-dashboard/](./06-team-leader-dashboard/)
 
-Supervisor routes:
-- `/supervisor` (Workspace Redirect)
-- `/supervisor/projects` (Project List)
-- `/supervisor/projects/new` (Creation Wizard)
-- `/supervisor/projects/[projectId]/*` (All operational modules)
-- `/supervisor/settings` (Personal settings)
+| File | Description |
+|------|-------------|
+| [TEAMLEADER DASHBOARD.md](./06-team-leader-dashboard/TEAMLEADER%20DASHBOARD.md) | Team Leader execution coordination and team management |
 
-Team Leader routes:
-- `/teamleader/overview`, `/teamleader/members`, `/teamleader/map`
-- `/teamleader/tasks`, `/teamleader/forms`, `/teamleader/performance`
-- `/teamleader/notifications`, `/teamleader/activity`, `/teamleader/settings`
+## Part 7: Field Worker Dashboard — [07-field-worker-dashboard/](./07-field-worker-dashboard/)
 
-Field Worker (User) routes:
-- `/user/home`, `/user/map`, `/user/tasks`
-- `/user/forms/[id]`, `/user/team`, `/user/notifications`
+| File | Description |
+|------|-------------|
+| [USER DASHBOARD.md](./07-field-worker-dashboard/USER%20DASHBOARD.md) | Field Worker task execution, form submission, offline workflows |
+| [AUDIT_USER_DASHBOARD.md](./07-field-worker-dashboard/AUDIT_USER_DASHBOARD.md) | Implementation audit — feature-by-feature status |
+
+## Part 8: System Maintenance — [08-maintenance/](./08-maintenance/)
+
+| File | Description |
+|------|-------------|
+| [SYSTEM MAINTAINANCE FEATURES.md](./08-maintenance/SYSTEM%20MAINTAINANCE%20FEATURES.md) | System maintenance and reliability tooling |
+
+## Part 9: Planning & Roadmap — [09-planning/](./09-planning/)
+
+| File | Description |
+|------|-------------|
+| [TODO.md](./09-planning/TODO.md) | Development roadmap and task tracking |
+
+---
 
 ## Recommended Read Order
 
-1. [README.md](./README.md)
-2. [QUICK_START.md](./QUICK_START.md)
-3. [PROJECT DOCUMENTATION.md](./PROJECT%20DOCUMENTATION.md)
-4. [ADMIN DASHBOARD UPDATED.md](./ADMIN%20DASHBOARD%20UPDATED.md)
-5. [SUPERVISOR DASHBOARD.md](./SUPERVISOR%20DASHBOARD.md)
-6. [TEAMLEADER DASHBOARD.md](./TEAMLEADER%20DASHBOARD.md)
-7. [USER DASHBOARD.md](./USER%20DASHBOARD.md)
-
-## Current Architecture Snapshot
-
-- Admin owns platform-wide governance, security, audit, maintenance, and global visibility
-- Supervisor owns project execution, teams, zones, tasks, invitations, and project analytics
-- Team Leader coordinates team execution, task assignment, and field monitoring
-- Field Worker performs tasks, fills forms, shares location, and works offline
-- Backend (Node.js/Express + MySQL) provides REST APIs, WebSocket real-time updates, email notifications, and database migrations
-- Frontend security includes CSRF protection, token refresh, inactivity timeout, route guards, and input sanitization
-
-This means the documentation should now be read as a complete four-role system with full backend integration.
+1. [Project Overview](./01-project-overview/README.md)
+2. [Quick Start](./01-project-overview/QUICK_START.md)
+3. [Project Documentation](./01-project-overview/PROJECT%20DOCUMENTATION.md)
+4. [Technical Inspection Report](./02-architecture/TECHNICAL_INSPECTION_REPORT.md)
+5. [Admin Dashboard](./04-admin-dashboard/ADMIN%20DASHBOARD%20UPDATED.md)
+6. [Supervisor Dashboard](./05-supervisor-dashboard/SUPERVISOR%20DASHBOARD.md)
+7. [Team Leader Dashboard](./06-team-leader-dashboard/TEAMLEADER%20DASHBOARD.md)
+8. [Field Worker Dashboard](./07-field-worker-dashboard/USER%20DASHBOARD.md)
+9. [Security Audit](./03-security/SECURITY_AUDIT.md)

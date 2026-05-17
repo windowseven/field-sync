@@ -5,26 +5,11 @@ import { emitToUser } from '../sockets/wsServer.js';
 import { logAudit } from './auditLogController.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
-
-function getUserRole(userId) {
-  if (userId.startsWith('admin-')) return 'admin';
-  if (userId.startsWith('sup-')) return 'supervisor';
-  if (userId.startsWith('tl-')) return 'team_leader';
-  return 'field_agent';
-}
-
-function getNotificationLink(userId) {
-  const role = getUserRole(userId);
-  if (role === 'admin') return '/admin/notifications';
-  if (role === 'supervisor') return '/supervisor/notifications';
-  if (role === 'team_leader') return '/teamleader/notifications';
-  return '/user/notifications';
-}
+import { getNotificationLink } from '../utils/roleHelpers.js';
+import { paginate } from '../services/paginationService.js';
 
 export const getAllTasks = asyncHandler(async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page || '1', 10));
-  const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = paginate(req.query.page, req.query.limit, 200);
   const statusFilter = req.query.status || null;
 
   let whereSql = 't.assigned_to = ?';
@@ -42,9 +27,10 @@ export const getAllTasks = asyncHandler(async (req, res) => {
   const total = countRows[0].total;
 
   const [rows] = await pool.query(
-    `SELECT t.*, p.location, p.name as project_name
+    `SELECT t.*, p.location, p.name as project_name, z.name AS zone_name
      FROM tasks t
      JOIN projects p ON t.project_id = p.id
+     LEFT JOIN zones z ON t.zone_id = z.id
      WHERE ${whereSql}
      ORDER BY t.created_at DESC
      LIMIT ? OFFSET ?`,
@@ -79,9 +65,7 @@ export const getTaskById = asyncHandler(async (req, res) => {
 
 export const getTasksByProject = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
-  const page = Math.max(1, parseInt(req.query.page || '1', 10));
-  const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = paginate(req.query.page, req.query.limit, 200);
   const statusFilter = req.query.status || null;
 
   let whereSql = 'project_id = ?';
@@ -274,6 +258,27 @@ export const updateTask = asyncHandler(async (req, res) => {
       body: updates.title,
       is_read: 0,
       action_url: link,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  if (updates.form_id && existing.form_id !== updates.form_id && updates.assigned_to) {
+    const [formRows] = await pool.query('SELECT title FROM forms WHERE id = ?', [updates.form_id]);
+    const formTitle = formRows[0]?.title || 'a form';
+    const formNotifId = uuidv4();
+    const formLink = getNotificationLink(updates.assigned_to);
+    await pool.query(
+      'INSERT INTO notifications (id, user_id, type, title, message, status, link) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [formNotifId, updates.assigned_to, 'form_assignment', 'New form assigned', `Complete the form "${formTitle}" for task: ${updates.title}`, 'unread', formLink]
+    );
+    emitToUser(updates.assigned_to, 'notification:new', {
+      id: formNotifId,
+      user_id: updates.assigned_to,
+      type: 'form_assignment',
+      title: 'New form assigned',
+      body: `Complete the form "${formTitle}" for task: ${updates.title}`,
+      is_read: 0,
+      action_url: formLink,
       created_at: new Date().toISOString(),
     });
   }

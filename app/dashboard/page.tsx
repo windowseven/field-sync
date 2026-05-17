@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
@@ -9,17 +10,24 @@ import {
   TrendingUp, TrendingDown, History, Megaphone, Power, Globe,
   Ban, FolderOpen,
 } from 'lucide-react'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend,
-} from 'recharts'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { dashboardService } from '@/lib/api/dashboardService'
+
+const ChartsSection = dynamic(() => import('./_components/ChartsSection').then((m) => ({ default: m.ChartsSection })), {
+  loading: () => (
+    <div className="grid gap-6 lg:grid-cols-3">
+      {[1, 2, 3].map((i) => (
+        <Card key={i} className={i === 2 ? '' : 'lg:col-span-2'}>
+          <CardHeader><div className="h-5 w-32 bg-muted rounded animate-pulse" /><div className="h-3 w-48 bg-muted rounded animate-pulse mt-2" /></CardHeader>
+          <CardContent><div className="h-[280px] bg-muted/30 rounded animate-pulse" /></CardContent>
+        </Card>
+      ))}
+    </div>
+  ),
+})
 
 const quickActions = [
   { label: 'Global Users', sub: 'Manage all accounts', icon: Users, href: '/dashboard/users' },
@@ -231,48 +239,12 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Charts */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Platform Activity</CardTitle>
-                <CardDescription>Real 24-hour activity from audit logs, submissions, and live API traffic</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="users">
-                  <TabsList className="mb-4">
-                    <TabsTrigger value="users">Users</TabsTrigger>
-                    <TabsTrigger value="submissions">Submissions</TabsTrigger>
-                    <TabsTrigger value="api">API Calls</TabsTrigger>
-                  </TabsList>
-                  {(['users', 'submissions', 'api'] as const).map((key) => {
-                    const colors: Record<string, string> = { users: 'hsl(var(--primary))', submissions: 'hsl(var(--chart-2))', api: 'hsl(var(--chart-3))' }
-                    return (
-                      <TabsContent key={key} value={key} className="h-[280px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={activityData}>
-                            <defs>
-                              <linearGradient id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={colors[key]} stopOpacity={0.3} />
-                                <stop offset="95%" stopColor={colors[key]} stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                            <XAxis dataKey="time" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-                            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                            <Area type="monotone" dataKey={key} stroke={colors[key]} fill={`url(#grad-${key})`} strokeWidth={2} />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </TabsContent>
-                    )
-                  })}
-                </Tabs>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Active User Hits</p>
-                    <p className="mt-1 text-2xl font-bold">{activityTotals.users}</p>
-                  </div>
+          <ChartsSection
+            activityData={activityData}
+            activityTotals={activityTotals}
+            userDistribution={userDistribution}
+            projectActivity={projectActivity}
+          />
                   <div className="rounded-lg border border-border bg-muted/30 p-3">
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Submissions in 24h</p>
                     <p className="mt-1 text-2xl font-bold">{activityTotals.submissions}</p>

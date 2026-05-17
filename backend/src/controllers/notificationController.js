@@ -2,12 +2,11 @@ import pool from '../config/database.js';
 import logger from '../utils/logger.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
+import { paginate, buildPaginationResponse } from '../services/paginationService.js';
 
 export const getNotifications = asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const page = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = paginate(req.query.page, req.query.limit, 200);
 
     const [countRows] = await pool.query(
       'SELECT COUNT(*) as total FROM notifications WHERE user_id = ?',

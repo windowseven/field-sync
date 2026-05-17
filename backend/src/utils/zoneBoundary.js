@@ -2,17 +2,7 @@ import pool from '../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
 import { emitToUser } from '../sockets/wsServer.js';
 import { getUserRole, getNotificationLink } from './roleHelpers.js';
-
-function isPointInPolygon(lat, lng, polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i][0], yi = polygon[i][1];
-    const xj = polygon[j][0], yj = polygon[j][1];
-    const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
+import { isPointInPolygon } from '../services/zoneService.js';
 
 export const checkZoneBoundary = async (userId, lat, lng) => {
   const [taskRows] = await pool.query(

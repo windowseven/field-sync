@@ -43,7 +43,7 @@
 
 **Backend:** `GET /tasks` (paginated), `PATCH /tasks/:id`  
 **Frontend:** `user/tasks/page.tsx`  
-**Gaps:** Task status update is **queued for offline sync only** — no direct API call on click when online, meaning status doesn't update server-side until sync runs
+**Gaps:** None — calls API directly when online, falls back to offline queue on error
 
 ---
 
@@ -59,8 +59,8 @@
 | Save draft | ✅ Done | Auto-save to IndexedDB (2s debounce), manual save button, draft restore on return |
 | Submit final | ✅ Done | `syncService.enqueue('form_submission', ...)` |
 | Linked to Task | ✅ Done | Shows task title, location, deadline, and status on form view |
-| Linked to Zone | ❌ Missing | No zone context on form view |
-| Linked to Session | ⚠️ Partial | Shows "Session Active" badge but it's hardcoded, not checking real status |
+| Linked to Zone | ✅ Done | Zone name shown in linked task card via `GET /tasks` JOIN with zones |
+| Linked to Session | ✅ Done | Badge reflects real session status from `GET /users/session` |
 
 **Backend:** `GET /forms`, `GET /forms/:id`, `POST /submissions`  
 **Frontend:** `user/forms/page.tsx` + `user/forms/[id]/page.tsx`  
@@ -113,7 +113,7 @@
 
 **Backend:** `GET /notifications`, `PUT /notifications/:id`, `PUT /notifications/read-all`, `GET /notifications/unread-count`  
 **Frontend:** `user/notifications/page.tsx` + `notifications-panel.tsx`  
-**Gaps:** No form assignment notifications.
+**Gaps:** None — form assignment notifications sent on task creation (with `form_id`) and task update (when `form_id` changes). Team leader messaging uses generic notification system — no dedicated messaging channel.
 
 ---
 
@@ -163,7 +163,7 @@
 
 **Backend:** `POST /sync/batch` — batch endpoint for offline submissions  
 **Frontend:** `user/sync/page.tsx`, `lib/db/syncDatabase.ts`, `lib/api/syncService.ts`  
-**Gaps:** Auto-sync trigger on reconnect needs verification. Sync retry logic unclear.
+**Gaps:** None — auto-sync on `online` event, 5-min periodic check, exponential backoff for failed items.
 
 ---
 
@@ -198,7 +198,7 @@
 | 🧭 Navigate assigned zones | ✅ Done | Map shows zone boundaries |
 | 🤝 Request help/meeting | ✅ Done | Full help request flow |
 | 🔄 Work offline | ✅ Done | Dexie + sync queue |
-| 🔄 Sync when online | ⚠️ Partial | Sync endpoint exists, auto-trigger needs check |
+| 🔄 Sync when online | ✅ Done | Auto-triggers on `online` event, periodic 5-min check, immediate on enqueue |
 | 🔔 Receive notifications | ✅ Done | Real-time via WebSocket |
 | 👥 View teammates + distance | ✅ Done | Haversine distance calculation implemented |
 | ⚙️ Manage settings | ✅ Done | Full settings CRUD |

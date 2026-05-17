@@ -5,6 +5,8 @@ import { logAudit } from './auditLogController.js';
 import { emitToUser } from '../sockets/wsServer.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
+import { isPointInPolygon } from '../services/zoneService.js';
+import { paginate } from '../services/paginationService.js';
 
 export const getTeamStats = asyncHandler(async (req, res) => {
   const [teamRows] = await pool.query('SELECT id, name, project_id, session_started_at FROM teams WHERE leader_id = ?', [req.user.id]);
@@ -107,17 +109,6 @@ export const checkZoneBreaches = asyncHandler(async (req, res) => {
     },
   });
 });
-
-function isPointInPolygon(lat, lng, polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [yi, xi] = polygon[i];
-    const [yj, xj] = polygon[j];
-    const intersect = yi > lng !== yj > lng && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
 
 export const sendTeamAnnouncement = asyncHandler(async (req, res) => {
   const { title, message } = req.body;

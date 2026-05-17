@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, FileText, Loader2, Info, Save, Trash2, RotateCcw, ClipboardList, MapPin
+  ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, FileText, Loader2, Info, Save, Trash2, RotateCcw, ClipboardList, MapPin, Compass
 } from 'lucide-react'
 import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -32,6 +32,7 @@ export default function FormDetailPage() {
   
   const { data: response, error } = useSWR(`/forms/${formId}`, fetcher)
   const { data: tasksResponse } = useSWR('/tasks', fetcher)
+  const { data: sessionData } = useSWR('/users/session', fetcher)
   const [currentStep, setCurrentStep] = useState(0)
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -266,9 +267,19 @@ export default function FormDetailPage() {
                     <Save className="h-3 w-3 mr-1" /> Draft
                   </Badge>
                 )}
-                <Badge variant="outline" className="h-6 font-bold uppercase tracking-widest border-primary/20 bg-primary/5 text-primary">
-                  Session Active
-                </Badge>
+                {sessionData?.data?.session?.status === 'online' ? (
+                  <Badge variant="outline" className="h-6 font-bold uppercase tracking-widest border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+                    Session Active
+                  </Badge>
+                ) : sessionData?.data?.session?.status === 'idle' ? (
+                  <Badge variant="outline" className="h-6 font-bold uppercase tracking-widest border-amber-500/30 bg-amber-500/10 text-amber-600">
+                    Session Paused
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="h-6 font-bold uppercase tracking-widest border-muted-foreground/30 bg-muted/10 text-muted-foreground">
+                    Not Started
+                  </Badge>
+                )}
               </div>
             </div>
             
@@ -311,6 +322,11 @@ export default function FormDetailPage() {
                     <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">Linked Task</p>
                     <p className="text-sm font-semibold">{linkedTask.title}</p>
                     <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
+                      {linkedTask.zone_name && (
+                        <span className="flex items-center gap-1">
+                          <Compass className="h-3 w-3" /> {linkedTask.zone_name}
+                        </span>
+                      )}
                       {linkedTask.location && (
                         <span className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" /> {linkedTask.location}

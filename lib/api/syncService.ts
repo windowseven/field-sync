@@ -30,6 +30,17 @@ class SyncService {
   }
 
   /**
+   * Calculate backoff delay in ms based on retry count
+   */
+  private getBackoffDelay(retries: number): number {
+    if (retries === 0) return 0;
+    const baseMs = 2000;
+    const maxMs = 60000;
+    const delay = Math.min(baseMs * Math.pow(2, retries - 1) + Math.random() * 1000, maxMs);
+    return delay;
+  }
+
+  /**
    * Process all pending items in the queue
    */
   async processQueue() {
@@ -45,26 +56,36 @@ class SyncService {
 
     if (pendingItems.length === 0) return;
 
+    const now = Date.now();
+    const dueItems = pendingItems.filter(item => {
+      if (item.status === 'pending') return true;
+      const delay = this.getBackoffDelay(item.retries || 0);
+      const lastAttempt = item.lastAttemptAt ? new Date(item.lastAttemptAt).getTime() : 0;
+      return (now - lastAttempt) >= delay;
+    });
+
+    if (dueItems.length === 0) return;
+
     this.isProcessing = true;
-    console.log(`[Sync] Processing ${pendingItems.length} items...`);
+    console.log(`[Sync] Processing ${dueItems.length} items...`);
 
     try {
-      // Send items to backend in a single batch
-      const response: any = await http.post('/sync/batch', { items: pendingItems });
+      const response: any = await http.post('/sync/batch', { items: dueItems });
 
       if (response.status === 'success') {
         const { results } = response.data;
         
         for (const res of results) {
           if (res.status === 'success') {
-            await db.syncQueue.update(res.id, { status: 'synced', retries: 0, error: undefined });
+            await db.syncQueue.update(res.id, { status: 'synced', retries: 0, error: undefined, lastAttemptAt: undefined });
           } else {
             const item = await db.syncQueue.get(res.id);
             if (item) {
               await db.syncQueue.update(res.id, { 
                 status: 'failed', 
-                retries: item.retries + 1,
-                error: res.message 
+                retries: (item.retries || 0) + 1,
+                error: res.message,
+                lastAttemptAt: new Date().toISOString()
               });
             }
           }
@@ -74,7 +95,6 @@ class SyncService {
       }
     } catch (error) {
       console.error('[Sync] Batch processing failed:', error);
-      // Logic for retry backoff could be added here
     } finally {
       this.isProcessing = false;
     }

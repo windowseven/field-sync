@@ -15,6 +15,7 @@ import {
   getPasswordSchema, loginSchema, signAccessToken, signRefreshToken,
   isPendingEmailVerification, resendPendingRegistrationOtp, generateAndSendOtp,
 } from '../utils/authHelpers.js';
+import { validateAndLockInviteLink, validateAndLockEmailInvite, consumeInvite } from '../services/inviteService.js';
 
 const registerSchema = z.object({
   name: z.string().min(2).max(100),
@@ -176,52 +177,32 @@ async function registerWithInvite(validated, inviteCode, inviteToken, req, res) 
   let committed = false;
   let released = false;
   let inviteData = null;
-  let inviteType = null;
 
   try {
     await connection.beginTransaction();
 
     if (inviteCode) {
-      const [rows] = await connection.query(
-        'SELECT * FROM invite_links WHERE code = ? FOR UPDATE', [inviteCode]
-      );
-      if (rows.length === 0) {
+      const result = await validateAndLockInviteLink(inviteCode, connection);
+      if (!result) {
         await connection.rollback(); connection.release();
         throw new AppError('Invalid invitation code', 400);
       }
-      const invite = rows[0];
-      if (invite.status !== 'active') throw new AppError(`Invitation is ${invite.status}`, 400);
-      if (new Date(invite.expires_at) < new Date()) {
-        await connection.query('UPDATE invite_links SET status = "expired" WHERE id = ?', [invite.id]);
+      if (!result.valid) {
         await connection.rollback(); connection.release();
-        throw new AppError('Invitation has expired', 400);
+        throw new AppError(result.reason, 400);
       }
-      if (invite.uses + 1 > invite.max_uses) {
-        await connection.query('UPDATE invite_links SET status = "maxed" WHERE id = ?', [invite.id]);
-        await connection.rollback(); connection.release();
-        throw new AppError('Invitation has reached its usage limit', 400);
-      }
-      inviteData = invite;
-      inviteType = 'link';
+      inviteData = result;
     } else if (inviteToken) {
-      const [rows] = await connection.query('SELECT * FROM email_invites WHERE token = ? FOR UPDATE', [inviteToken]);
-      if (rows.length === 0) {
+      const result = await validateAndLockEmailInvite(inviteToken, validated.email, connection);
+      if (!result) {
         await connection.rollback(); connection.release();
         throw new AppError('Invalid invitation token', 400);
       }
-      const invite = rows[0];
-      if (invite.status !== 'pending') throw new AppError(`Invitation is ${invite.status}`, 400);
-      if (new Date(invite.expires_at) < new Date()) {
-        await connection.query('UPDATE email_invites SET status = "expired" WHERE id = ?', [invite.id]);
+      if (!result.valid) {
         await connection.rollback(); connection.release();
-        throw new AppError('Invitation has expired', 400);
+        throw new AppError(result.reason, 400);
       }
-      if (invite.email.toLowerCase() !== validated.email.toLowerCase()) {
-        await connection.rollback(); connection.release();
-        throw new AppError('Email does not match the invitation', 400);
-      }
-      inviteData = invite;
-      inviteType = 'email';
+      inviteData = result;
     }
 
     const [existing] = await connection.query(
@@ -240,24 +221,15 @@ async function registerWithInvite(validated, inviteCode, inviteToken, req, res) 
 
     const id = crypto.randomUUID();
     const passwordHash = await bcrypt.hash(validated.password, 12);
-    const role = inviteData.role;
-    const team = inviteData.team || null;
+    const role = inviteData.invite.role;
+    const team = inviteData.invite.team || null;
 
     await connection.query(
       'INSERT INTO users (id, name, first_name, email, password_hash, role, status, team) VALUES (?, ?, ?, ?, ?, ?, "offline", ?)',
       [id, validated.name, validated.first_name, validated.email, passwordHash, role, team]
     );
 
-    if (inviteType === 'link') {
-      const newUses = inviteData.uses + 1;
-      const newStatus = newUses >= inviteData.max_uses ? 'maxed' : 'active';
-      await connection.query(
-        'UPDATE invite_links SET uses = ?, status = ? WHERE id = ?',
-        [newUses, newStatus, inviteData.id]
-      );
-    } else if (inviteType === 'email') {
-      await connection.query('UPDATE email_invites SET status = "accepted" WHERE id = ?', [inviteData.id]);
-    }
+    await consumeInvite(inviteData, connection);
 
     await connection.commit();
     committed = true;
@@ -276,9 +248,9 @@ async function registerWithInvite(validated, inviteCode, inviteToken, req, res) 
       }
     }
 
-    await logAudit(null, 'user.register', { user_id: id, email: validated.email, role, invite: inviteType });
+    await logAudit(null, 'user.register', { user_id: id, email: validated.email, role, invite: inviteData.type });
 
-    logger.info(`New user registered: ${validated.email} (via ${inviteType} invite)`);
+    logger.info(`New user registered: ${validated.email} (via ${inviteData.type} invite)`);
     res.status(201).json({
       status: 'success',
       message: emailFailed
