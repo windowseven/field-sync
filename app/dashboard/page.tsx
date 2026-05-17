@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { dashboardService } from '@/lib/api/dashboardService'
 
 const ChartsSection = dynamic(() => import('./_components/ChartsSection').then((m) => ({ default: m.ChartsSection })), {
   loading: () => (
@@ -245,104 +246,38 @@ export default function DashboardPage() {
             userDistribution={userDistribution}
             projectActivity={projectActivity}
           />
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Submissions in 24h</p>
-                    <p className="mt-1 text-2xl font-bold">{activityTotals.submissions}</p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">API Requests in 24h</p>
-                    <p className="mt-1 text-2xl font-bold">{activityTotals.api}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>User Distribution</CardTitle>
-                <CardDescription>Breakdown by role across the platform</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={userDistribution} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" stroke="hsl(var(--background))" strokeWidth={2}>
-                        {userDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+          {/* Recent Activity */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Recent Activity</CardTitle>
+                  <CardDescription>Latest system events and admin actions</CardDescription>
                 </div>
-                <div className="mt-4 space-y-2">
-                  {userDistribution.map((item) => (
-                    <div key={item.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-sm text-muted-foreground">{item.name}</span>
-                      </div>
-                      <span className="font-medium">{item.value.toLocaleString()}</span>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/dashboard/audit">
+                    View All <ArrowUpRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentActivity.map((a, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className={cn('flex h-9 w-9 items-center justify-center rounded-full shrink-0', a.bg)}>
+                      <a.icon className={cn('h-4 w-4', a.color)} />
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Activity + Project Activity */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Recent Activity</CardTitle>
-                    <CardDescription>Latest system events and admin actions</CardDescription>
-                  </div>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href="/dashboard/audit">
-                      View All <ArrowUpRight className="ml-1 h-4 w-4" />
-                    </Link>
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((a, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <div className={cn('flex h-9 w-9 items-center justify-center rounded-full shrink-0', a.bg)}>
-                        <a.icon className={cn('h-4 w-4', a.color)} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{a.message}</p>
-                        <p className="text-xs text-muted-foreground truncate">{a.sub} · {a.time}</p>
-                      </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{a.message}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.sub} · {a.time}</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Project Activity</CardTitle>
-                <CardDescription>Active and new projects this week</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={projectActivity}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-                      <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-                      <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                      <Legend />
-                      <Bar dataKey="active" name="Active" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="new" name="New" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Quick Actions */}
           <Card>
