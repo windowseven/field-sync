@@ -3,295 +3,258 @@ import logger from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { logAudit } from './auditLogController.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
 // ─── Get All Users ──────────────────────────────────────────
-export const getAllUsers = async (req, res) => {
-  try {
-    const page = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
-    const offset = (page - 1) * limit;
-    const roleFilter = req.query.role || null;
-    const search = req.query.search || null;
+export const getAllUsers = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
+  const offset = (page - 1) * limit;
+  const roleFilter = req.query.role || null;
+  const search = req.query.search || null;
 
-    let whereClauses = [];
-    let queryParams = [];
+  let whereClauses = [];
+  let queryParams = [];
 
-    if (roleFilter) {
-      whereClauses.push('role = ?');
-      queryParams.push(roleFilter);
-    }
-    if (search) {
-      whereClauses.push('(name LIKE ? OR email LIKE ?)');
-      queryParams.push(`%${search}%`, `%${search}%`);
-    }
-
-    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
-    const [countRows] = await pool.query(
-      `SELECT COUNT(*) as total FROM users ${whereSql}`,
-      queryParams
-    );
-    const total = countRows[0].total;
-
-    const [rows] = await pool.query(
-      `SELECT id, name, first_name, email, role, status, last_seen, avatar, phone
-       FROM users ${whereSql}
-       ORDER BY name ASC
-       LIMIT ? OFFSET ?`,
-      [...queryParams, limit, offset]
-    );
-
-    res.json({
-      status: 'success',
-      data: {
-        users: rows,
-        pagination: {
-          page,
-          limit,
-          total: parseInt(total, 10),
-          totalPages: Math.ceil(total / limit),
-        },
-      },
-    });
-  } catch (error) {
-    logger.error('Get all users error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  if (roleFilter) {
+    whereClauses.push('role = ?');
+    queryParams.push(roleFilter);
   }
-};
+  if (search) {
+    whereClauses.push('(name LIKE ? OR email LIKE ?)');
+    queryParams.push(`%${search}%`, `%${search}%`);
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  const [countRows] = await pool.query(
+    `SELECT COUNT(*) as total FROM users ${whereSql}`,
+    queryParams
+  );
+  const total = countRows[0].total;
+
+  const [rows] = await pool.query(
+    `SELECT id, name, first_name, email, role, status, last_seen, avatar, phone
+     FROM users ${whereSql}
+     ORDER BY name ASC
+     LIMIT ? OFFSET ?`,
+    [...queryParams, limit, offset]
+  );
+
+  res.json({
+    status: 'success',
+    data: {
+      users: rows,
+      pagination: {
+        page,
+        limit,
+        total: parseInt(total, 10),
+        totalPages: Math.ceil(total / limit),
+      },
+    },
+  });
+});
 
 // ─── Get User By ID ─────────────────────────────────────────
-export const getUserById = async (req, res) => {
+export const getUserById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  try {
-    const [rows] = await pool.query(
-      'SELECT id, name, first_name, email, role, status, last_seen, avatar, phone FROM users WHERE id = ?',
-      [id]
-    );
-    const user = rows[0];
+  const [rows] = await pool.query(
+    'SELECT id, name, first_name, email, role, status, last_seen, avatar, phone FROM users WHERE id = ?',
+    [id]
+  );
+  const user = rows[0];
 
-    if (!user) {
-      return res.status(404).json({ status: 'error', message: 'User not found' });
-    }
-
-    res.json({ status: 'success', data: { user } });
-  } catch (error) {
-    logger.error('Get user by ID error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  if (!user) {
+    throw new AppError('User not found', 404);
   }
-};
+
+  res.json({ status: 'success', data: { user } });
+});
 
 // ─── Create User (Admin only) ───────────────────────────────
-export const createUser = async (req, res) => {
-  try {
-    const { name, first_name, email, password, role, phone } = req.body;
+export const createUser = asyncHandler(async (req, res) => {
+  const { name, first_name, email, password, role, phone } = req.body;
 
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'name, email, password, and role are required',
-      });
-    }
-
-    const validRoles = ['admin', 'supervisor', 'team_leader', 'field_agent'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({
-        status: 'error',
-        message: `Invalid role. Must be one of: ${validRoles.join(', ')}`,
-      });
-    }
-
-    // Check if email already exists
-    const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
-    if (existing.length > 0) {
-      return res.status(409).json({ status: 'error', message: 'Email already registered' });
-    }
-
-    const id = crypto.randomUUID();
-    const passwordHash = await bcrypt.hash(password, 12);
-
-    await pool.query(
-      'INSERT INTO users (id, name, first_name, email, password_hash, role, phone, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, name, first_name || null, email, passwordHash, role, phone || null, 'offline']
-    );
-
-    await logAudit(req.user.id, 'user.create', { target_user_id: id, email, role });
-
-    const [rows] = await pool.query(
-      'SELECT id, name, first_name, email, role, status, avatar, phone FROM users WHERE id = ?',
-      [id]
-    );
-
-    logger.info(`User created by admin: ${email} (${role})`);
-    res.status(201).json({ status: 'success', data: { user: rows[0] } });
-  } catch (error) {
-    logger.error('Create user error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  if (!name || !email || !password || !role) {
+    throw new AppError('name, email, password, and role are required', 400);
   }
-};
+
+  const validRoles = ['admin', 'supervisor', 'team_leader', 'field_agent'];
+  if (!validRoles.includes(role)) {
+    throw new AppError(`Invalid role. Must be one of: ${validRoles.join(', ')}`, 400);
+  }
+
+  // Check if email already exists
+  const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+  if (existing.length > 0) {
+    throw new AppError('Email already registered', 409);
+  }
+
+  const id = crypto.randomUUID();
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  await pool.query(
+    'INSERT INTO users (id, name, first_name, email, password_hash, role, phone, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, name, first_name || null, email, passwordHash, role, phone || null, 'offline']
+  );
+
+  await logAudit(req.user.id, 'user.create', { target_user_id: id, email, role });
+
+  const [rows] = await pool.query(
+    'SELECT id, name, first_name, email, role, status, avatar, phone FROM users WHERE id = ?',
+    [id]
+  );
+
+  logger.info(`User created by admin: ${email} (${role})`);
+  res.status(201).json({ status: 'success', data: { user: rows[0] } });
+});
 
 // ─── Update User (Admin only) ───────────────────────────────
-export const updateUser = async (req, res) => {
+export const updateUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  try {
-    const [existingRows] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
-    const existing = existingRows[0];
-    if (!existing) {
-      return res.status(404).json({ status: 'error', message: 'User not found' });
-    }
-
-    const updates = {
-      name: req.body.name ?? existing.name,
-      first_name: req.body.first_name ?? existing.first_name,
-      email: req.body.email ?? existing.email,
-      role: req.body.role ?? existing.role,
-      phone: req.body.phone ?? existing.phone,
-      status: req.body.status ?? existing.status,
-    };
-
-    // Validate role if changed
-    const validRoles = ['admin', 'supervisor', 'team_leader', 'field_agent'];
-    if (!validRoles.includes(updates.role)) {
-      return res.status(400).json({
-        status: 'error',
-        message: `Invalid role. Must be one of: ${validRoles.join(', ')}`,
-      });
-    }
-
-    // Check email uniqueness if changed
-    if (updates.email !== existing.email) {
-      const [emailCheck] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [updates.email, id]);
-      if (emailCheck.length > 0) {
-        return res.status(409).json({ status: 'error', message: 'Email already in use' });
-      }
-    }
-
-    // Handle password change
-    let passwordClause = '';
-    const queryParams = [updates.name, updates.first_name, updates.email, updates.role, updates.phone, updates.status];
-
-    if (req.body.password) {
-      const passwordHash = await bcrypt.hash(req.body.password, 12);
-      passwordClause = ', password_hash = ?';
-      queryParams.push(passwordHash);
-    }
-
-    queryParams.push(id);
-
-    await pool.query(
-      `UPDATE users SET name = ?, first_name = ?, email = ?, role = ?, phone = ?, status = ?${passwordClause} WHERE id = ?`,
-      queryParams
-    );
-
-    await logAudit(req.user.id, 'user.update', { target_user_id: id, changes: Object.keys(req.body) });
-
-    const [rows] = await pool.query(
-      'SELECT id, name, first_name, email, role, status, avatar, phone FROM users WHERE id = ?',
-      [id]
-    );
-
-    res.json({ status: 'success', data: { user: rows[0] } });
-  } catch (error) {
-    logger.error('Update user error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  const [existingRows] = await pool.query('SELECT * FROM users WHERE id = ?', [id]);
+  const existing = existingRows[0];
+  if (!existing) {
+    throw new AppError('User not found', 404);
   }
-};
+
+  const updates = {
+    name: req.body.name ?? existing.name,
+    first_name: req.body.first_name ?? existing.first_name,
+    email: req.body.email ?? existing.email,
+    role: req.body.role ?? existing.role,
+    phone: req.body.phone ?? existing.phone,
+    status: req.body.status ?? existing.status,
+  };
+
+  // Validate role if changed
+  const validRoles = ['admin', 'supervisor', 'team_leader', 'field_agent'];
+  if (!validRoles.includes(updates.role)) {
+    throw new AppError(`Invalid role. Must be one of: ${validRoles.join(', ')}`, 400);
+  }
+
+  // Check email uniqueness if changed
+  if (updates.email !== existing.email) {
+    const [emailCheck] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [updates.email, id]);
+    if (emailCheck.length > 0) {
+      throw new AppError('Email already in use', 409);
+    }
+  }
+
+  // Handle password change
+  let passwordClause = '';
+  const queryParams = [updates.name, updates.first_name, updates.email, updates.role, updates.phone, updates.status];
+
+  if (req.body.password) {
+    const passwordHash = await bcrypt.hash(req.body.password, 12);
+    passwordClause = ', password_hash = ?';
+    queryParams.push(passwordHash);
+  }
+
+  queryParams.push(id);
+
+  await pool.query(
+    `UPDATE users SET name = ?, first_name = ?, email = ?, role = ?, phone = ?, status = ?${passwordClause} WHERE id = ?`,
+    queryParams
+  );
+
+  await logAudit(req.user.id, 'user.update', { target_user_id: id, changes: Object.keys(req.body) });
+
+  const [rows] = await pool.query(
+    'SELECT id, name, first_name, email, role, status, avatar, phone FROM users WHERE id = ?',
+    [id]
+  );
+
+  res.json({ status: 'success', data: { user: rows[0] } });
+});
 
 // ─── Delete User (Admin only) ───────────────────────────────
-export const deleteUser = async (req, res) => {
+export const deleteUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  try {
-    // Prevent self-deletion
-    if (id === req.user.id) {
-      return res.status(400).json({ status: 'error', message: 'Cannot delete your own account' });
-    }
-
-    const [result] = await pool.query('DELETE FROM users WHERE id = ?', [id]);
-
-    if (result?.affectedRows === 0) {
-      return res.status(404).json({ status: 'error', message: 'User not found' });
-    }
-
-    await logAudit(req.user.id, 'user.delete', { target_user_id: id });
-
-    logger.info(`User deleted by admin: ${id}`);
-    res.json({ status: 'success', message: 'User deleted' });
-  } catch (error) {
-    logger.error('Delete user error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  // Prevent self-deletion
+  if (id === req.user.id) {
+    throw new AppError('Cannot delete your own account', 400);
   }
-};
+
+  const [result] = await pool.query('DELETE FROM users WHERE id = ?', [id]);
+
+  if (result?.affectedRows === 0) {
+    throw new AppError('User not found', 404);
+  }
+
+  await logAudit(req.user.id, 'user.delete', { target_user_id: id });
+
+  logger.info(`User deleted by admin: ${id}`);
+  res.json({ status: 'success', message: 'User deleted' });
+});
 
 // ─── Get Dashboard Stats (for field agents) ─────────────────
-export const getDashboardStats = async (req, res) => {
-  try {
-    const userId = req.user.id;
+export const getDashboardStats = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
 
-    const [taskCount] = await pool.query('SELECT COUNT(*) as total FROM tasks WHERE assigned_to = ?', [userId]);
-    const [completedTasks] = await pool.query(
-      'SELECT COUNT(*) as total FROM tasks WHERE assigned_to = ? AND status = "completed"',
-      [userId]
-    );
-    const [formCount] = await pool.query('SELECT COUNT(*) as total FROM submissions WHERE user_id = ?', [userId]);
+  const [taskCount] = await pool.query('SELECT COUNT(*) as total FROM tasks WHERE assigned_to = ?', [userId]);
+  const [completedTasks] = await pool.query(
+    'SELECT COUNT(*) as total FROM tasks WHERE assigned_to = ? AND status = "completed"',
+    [userId]
+  );
+  const [formCount] = await pool.query('SELECT COUNT(*) as total FROM submissions WHERE user_id = ?', [userId]);
 
-    const [latestTasks] = await pool.query(
-      'SELECT * FROM tasks WHERE assigned_to = ? AND status != "completed" ORDER BY created_at DESC LIMIT 3',
-      [userId]
-    );
+  const [latestTasks] = await pool.query(
+    'SELECT * FROM tasks WHERE assigned_to = ? AND status != "completed" ORDER BY created_at DESC LIMIT 3',
+    [userId]
+  );
 
-    const [userSession] = await pool.query(
-      'SELECT status, session_started_at FROM users WHERE id = ?',
-      [userId]
-    );
+  const [userSession] = await pool.query(
+    'SELECT status, session_started_at FROM users WHERE id = ?',
+    [userId]
+  );
 
-    const sessionInfo = userSession[0] ? {
-      status: userSession[0].status,
-      startedAt: userSession[0].session_started_at,
-    } : null;
+  const sessionInfo = userSession[0] ? {
+    status: userSession[0].status,
+    startedAt: userSession[0].session_started_at,
+  } : null;
 
-    const [zoneRows] = await pool.query(
-      `SELECT DISTINCT z.id, z.name
-       FROM tasks t
-       JOIN zones z ON t.zone_id = z.id
-       WHERE t.assigned_to = ? AND t.status IN ('pending', 'in-progress')`,
-      [userId]
-    );
+  const [zoneRows] = await pool.query(
+    `SELECT DISTINCT z.id, z.name
+     FROM tasks t
+     JOIN zones z ON t.zone_id = z.id
+     WHERE t.assigned_to = ? AND t.status IN ('pending', 'in-progress')`,
+    [userId]
+  );
 
-    const [nearbyCount] = await pool.query(
-      `SELECT COUNT(*) as total
-       FROM team_members tm
-       JOIN users u ON tm.user_id = u.id
-       WHERE tm.team_id IN (SELECT team_id FROM team_members WHERE user_id = ?)
-       AND u.id != ?
-       AND u.status = 'online'`,
-      [userId, userId]
-    );
+  const [nearbyCount] = await pool.query(
+    `SELECT COUNT(*) as total
+     FROM team_members tm
+     JOIN users u ON tm.user_id = u.id
+     WHERE tm.team_id IN (SELECT team_id FROM team_members WHERE user_id = ?)
+     AND u.id != ?
+     AND u.status = 'online'`,
+    [userId, userId]
+  );
 
-    res.json({
-      status: 'success',
-      data: {
-        taskStats: {
-          total: taskCount[0].total,
-          completed: completedTasks[0].total,
-        },
-        formStats: {
-          submitted: formCount[0].total,
-        },
-        latestTasks,
-        session: sessionInfo,
-        assignedZones: zoneRows,
-        nearbyTeammates: nearbyCount[0].total,
+  res.json({
+    status: 'success',
+    data: {
+      taskStats: {
+        total: taskCount[0].total,
+        completed: completedTasks[0].total,
       },
-    });
-  } catch (error) {
-    logger.error('Get dashboard stats error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+      formStats: {
+        submitted: formCount[0].total,
+      },
+      latestTasks,
+      session: sessionInfo,
+      assignedZones: zoneRows,
+      nearbyTeammates: nearbyCount[0].total,
+    },
+  });
+});
 
 // ─── Update Session ─────────────────────────────────────────
-export const updateSession = async (req, res) => {
+export const updateSession = asyncHandler(async (req, res) => {
   const { status } = req.body;
 
   const validStatuses = ['online', 'offline', 'idle'];
@@ -302,48 +265,43 @@ export const updateSession = async (req, res) => {
     });
   }
 
-  try {
-    const action = status === 'online' ? 'start' : status === 'idle' ? 'pause' : 'stop';
+  const action = status === 'online' ? 'start' : status === 'idle' ? 'pause' : 'stop';
 
-    if (action === 'start') {
-      await pool.query('UPDATE users SET status = ?, session_started_at = NOW(), last_seen = NOW() WHERE id = ?', [status, req.user.id]);
-      res.json({
-        status: 'success',
-        message: 'Session started',
-        data: {
-          action: 'started',
-          startedAt: new Date().toISOString(),
-        },
-      });
-    } else if (action === 'pause') {
-      await pool.query('UPDATE users SET status = ?, last_seen = NOW() WHERE id = ?', [status, req.user.id]);
-      res.json({
-        status: 'success',
-        message: 'Session paused',
-        data: { action: 'paused' },
-      });
-    } else {
-      const [rows] = await pool.query('SELECT session_started_at FROM users WHERE id = ?', [req.user.id]);
-      const sessionStartedAt = rows[0]?.session_started_at;
+  if (action === 'start') {
+    await pool.query('UPDATE users SET status = ?, session_started_at = NOW(), last_seen = NOW() WHERE id = ?', [status, req.user.id]);
+    res.json({
+      status: 'success',
+      message: 'Session started',
+      data: {
+        action: 'started',
+        startedAt: new Date().toISOString(),
+      },
+    });
+  } else if (action === 'pause') {
+    await pool.query('UPDATE users SET status = ?, last_seen = NOW() WHERE id = ?', [status, req.user.id]);
+    res.json({
+      status: 'success',
+      message: 'Session paused',
+      data: { action: 'paused' },
+    });
+  } else {
+    const [rows] = await pool.query('SELECT session_started_at FROM users WHERE id = ?', [req.user.id]);
+    const sessionStartedAt = rows[0]?.session_started_at;
 
-      await pool.query('UPDATE users SET status = ?, session_started_at = NULL, last_seen = NOW() WHERE id = ?', [status, req.user.id]);
+    await pool.query('UPDATE users SET status = ?, session_started_at = NULL, last_seen = NOW() WHERE id = ?', [status, req.user.id]);
 
-      let elapsedSeconds = 0;
-      if (sessionStartedAt) {
-        elapsedSeconds = Math.floor((Date.now() - new Date(sessionStartedAt).getTime()) / 1000);
-      }
-
-      res.json({
-        status: 'success',
-        message: 'Session ended',
-        data: {
-          action: 'ended',
-          durationSeconds: elapsedSeconds,
-        },
-      });
+    let elapsedSeconds = 0;
+    if (sessionStartedAt) {
+      elapsedSeconds = Math.floor((Date.now() - new Date(sessionStartedAt).getTime()) / 1000);
     }
-  } catch (error) {
-    logger.error('Update session error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+
+    res.json({
+      status: 'success',
+      message: 'Session ended',
+      data: {
+        action: 'ended',
+        durationSeconds: elapsedSeconds,
+      },
+    });
   }
-};
+});

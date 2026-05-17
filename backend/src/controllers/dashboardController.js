@@ -1,6 +1,8 @@
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
 import { getApiRequestSeries } from '../utils/requestMetrics.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
 function buildEmptyActivitySeries(hours = 24, now = new Date()) {
   const current = new Date(now);
@@ -32,8 +34,7 @@ function mergeHourlyRows(series, rows, fieldName) {
   }
 }
 
-export const getAdminDashboardStats = async (req, res) => {
-  try {
+export const getAdminDashboardStats = asyncHandler(async (req, res) => {
     const [userRows] = await pool.query(`
       SELECT 
         COUNT(*) as totalUsers,
@@ -116,14 +117,9 @@ export const getAdminDashboardStats = async (req, res) => {
         recentActivity: parseInt(recentActivityCount) || 0
       }
     });
-  } catch (error) {
-    logger.error('Dashboard stats error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch stats' });
-  }
 };
 
-export const getSystemHealth = async (req, res) => {
-  try {
+export const getSystemHealth = asyncHandler(async (req, res) => {
     res.json({
       status: 'success',
       data: {
@@ -134,8 +130,4 @@ export const getSystemHealth = async (req, res) => {
         timestamp: new Date().toISOString()
       }
     });
-  } catch (error) {
-    logger.error('System health error:', error);
-    res.status(500).json({ status: 'error', message: 'Health check failed' });
-  }
 };

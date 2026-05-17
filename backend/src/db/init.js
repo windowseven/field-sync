@@ -3,57 +3,55 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
+import { runMigrations } from './migrate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const initializeDatabase = async ({ allowDestructive = false } = {}) => {
-  try {
+  if (allowDestructive) {
+    logger.warn('⚠️  DESTRUCTIVE MODE ENABLED — this will drop and recreate all tables!');
     const schemaPath = path.join(__dirname, 'schema.sql');
-    let schemaSql = fs.readFileSync(schemaPath, 'utf8');
+    if (!fs.existsSync(schemaPath)) {
+      throw new Error('schema.sql not found — destructive init requires schema.sql for full reset');
+    }
 
-    // Remove SQL comments
+    let schemaSql = fs.readFileSync(schemaPath, 'utf8');
     schemaSql = schemaSql.replace(/--.*$/gm, '');
     schemaSql = schemaSql.replace(/\/\*[\s\S]*?\*\//g, '');
-
-    if (!allowDestructive) {
-      schemaSql = schemaSql.replace(/^SET FOREIGN_KEY_CHECKS = 0;\s*$/gim, '');
-      schemaSql = schemaSql.replace(/^SET FOREIGN_KEY_CHECKS = 1;\s*$/gim, '');
-      schemaSql = schemaSql.replace(/^DROP TABLE IF EXISTS .*;\s*$/gim, '');
-    }
 
     const queries = schemaSql
       .split(';')
       .map(q => q.trim())
       .filter(q => q.length > 0);
 
-    const tableQueries = queries.filter(query => /^CREATE\s+TABLE\b/i.test(query));
-    const remainingQueries = queries.filter(query => !/^CREATE\s+TABLE\b/i.test(query));
+    const tableQueries = queries.filter(q => /^CREATE\s+TABLE\b/i.test(q));
+    const remainingQueries = queries.filter(q => !/^CREATE\s+TABLE\b/i.test(q));
     const orderedQueries = [...tableQueries, ...remainingQueries];
 
     const connection = await pool.getConnection();
-    
-    logger.info('🚀 Starting database initialization...');
-
-    for (const query of orderedQueries) {
-      try {
-        await connection.query(query);
-      } catch (err) {
-        // Ignore "already exists" errors if we missed IF NOT EXISTS somewhere
-        if (
-          !err.message.includes('already exists') &&
-          !err.message.includes('Duplicate key name')
-        ) {
-          logger.error(`Error executing query: ${query.substring(0, 50)}...`);
-          logger.error(err.message);
+    try {
+      logger.info('🚀 Running destructive database reset...');
+      for (const query of orderedQueries) {
+        try {
+          await connection.query(query);
+        } catch (err) {
+          if (!err.message.includes('already exists') && !err.message.includes('Duplicate key name')) {
+            logger.warn(`Query warning: ${err.message}`);
+          }
         }
       }
+      logger.info('✅ Destructive reset complete.');
+    } finally {
+      connection.release();
     }
-
-    logger.info('✅ Database initialized successfully.');
-    connection.release();
-  } catch (error) {
-    logger.error('❌ Database initialization failed:', error.message);
-    throw error;
+    return;
   }
+
+  // Safe mode: run versioned migrations
+  logger.info('🚀 Running database migrations...');
+  const results = await runMigrations();
+  const applied = results.filter(r => r.status === 'applied').length;
+  const skipped = results.filter(r => r.status === 'skipped' || r.status === 'skipped_duplicate').length;
+  logger.info(`✅ Migrations complete (${applied} applied, ${skipped} skipped)`);
 };

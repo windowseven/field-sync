@@ -32,9 +32,11 @@ export const schemas = {
     body: z.object({
       name: z.string().min(2),
       email: z.string().email(),
-      password: z.string().min(8),
+      password: z.string().min(1),
       first_name: z.string().min(1).optional(),
-      role: z.enum(['field_agent', 'supervisor']).optional()
+      role: z.enum(['field_agent', 'supervisor']).optional(),
+      inviteCode: z.string().optional(),
+      inviteToken: z.string().optional()
     })
   }),
   projectCreate: z.object({

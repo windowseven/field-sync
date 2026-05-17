@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 import { getApiMonitorSnapshot, getRequestCount } from '../utils/requestMetrics.js';
 import { getRateLimitSnapshot } from '../utils/rateLimitMetrics.js';
 import { getSyncSnapshot } from '../utils/syncMetrics.js';
@@ -443,8 +445,7 @@ function determineStorageStatus(storageSummary) {
   return 'healthy';
 }
 
-export const getMaintenanceSnapshot = async (req, res) => {
-  try {
+export const getMaintenanceSnapshot = asyncHandler(async (req, res) => {
     const [databaseSummary, usageSummary, apiSummary, rateLimitSummary, syncSummary, errorSummary] = await Promise.all([
       getDatabaseSummary(),
       getAuditAndUsageSummary(),
@@ -576,11 +577,7 @@ export const getMaintenanceSnapshot = async (req, res) => {
         sandbox: sandboxSummary,
       },
     });
-  } catch (error) {
-    logger.error(`Maintenance snapshot error: ${error.message}`);
-    res.status(500).json({ status: 'error', message: 'Failed to load maintenance metrics' });
-  }
-};
+});
 
 function classifyAlertLevel(action = '', detail = {}) {
   if (action === 'auth.login.failed') return 'critical';
@@ -599,8 +596,7 @@ function alertIcon(level) {
 
 const ALERT_ACTIONS = ['auth.login.failed', 'user.register', 'user.update', 'user.delete', 'project.create'];
 
-export const getAlerts = async (req, res) => {
-  try {
+export const getAlerts = asyncHandler(async (req, res) => {
     const [rows] = await pool.query(`
       SELECT id, action, detail, ip_address, user_id, target_name, timestamp
       FROM audit_logs
@@ -650,8 +646,4 @@ export const getAlerts = async (req, res) => {
       .slice(0, 50);
 
     res.json({ status: 'success', data: all });
-  } catch (error) {
-    logger.error(`Get alerts error: ${error.message}`);
-    res.status(500).json({ status: 'error', message: 'Failed to load alerts' });
-  }
-};
+});

@@ -2,17 +2,18 @@ import pool from '../config/database.js';
 import logger from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { sendContactInquiryEmail } from '../services/emailService.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const submitContactInquiry = async (req, res) => {
-  try {
+export const submitContactInquiry = asyncHandler(async (req, res) => {
     const { name, email, subject, message } = req.body;
 
     if (!name || !email || !subject || !message) {
-      return res.status(400).json({ status: 'error', message: 'All fields are required' });
+      throw new AppError('All fields are required', 400);
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid email format' });
+      throw new AppError('Invalid email format', 400);
     }
 
     const id = uuidv4();
@@ -34,14 +35,9 @@ export const submitContactInquiry = async (req, res) => {
       status: 'success',
       message: 'Your message has been sent successfully. We will respond within 24 hours.',
     });
-  } catch (error) {
-    logger.error('Submit contact inquiry error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const getContactInquiries = async (req, res) => {
-  try {
+export const getContactInquiries = asyncHandler(async (req, res) => {
     const { status, subject } = req.query;
     let query = 'SELECT * FROM contact_inquiries WHERE 1=1';
     const params = [];
@@ -59,19 +55,14 @@ export const getContactInquiries = async (req, res) => {
 
     const [rows] = await pool.query(query, params);
     res.json({ status: 'success', data: { inquiries: rows } });
-  } catch (error) {
-    logger.error('Get contact inquiries error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const updateInquiryStatus = async (req, res) => {
-  try {
+export const updateInquiryStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { status, admin_response } = req.body;
 
     if (!status) {
-      return res.status(400).json({ status: 'error', message: 'Status is required' });
+      throw new AppError('Status is required', 400);
     }
 
     await pool.query(
@@ -80,8 +71,4 @@ export const updateInquiryStatus = async (req, res) => {
     );
 
     res.json({ status: 'success', message: 'Inquiry status updated' });
-  } catch (error) {
-    logger.error('Update inquiry status error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };

@@ -1,3 +1,15 @@
+/**
+ * Security policy defaults and env-based configuration.
+ *
+ * Design:
+ * - Passwords: minimum 8 chars with uppercase + number. No expiry or history (field workers rotate often).
+ * - Sessions: access token expiry controlled by JWT_EXPIRES_IN env var (default 24h). Refresh tokens last 7 days.
+ *   maxDevices=0 means unlimited — no device limit enforced.
+ * - Rate limits: per-auth-endpoint limits (10 login attempts, 3 OTP attempts per 15min window).
+ *   Global API limit is 200 requests per 15min window. Invite validation is separate (10 per 5min).
+ * - Optional features: email verification, 2FA, geo-restriction all disabled by default.
+ *   AllowedCountries: [] empty = no geo enforcement.
+ */
 function parseDurationToHours(value, fallbackHours) {
   if (typeof value !== 'string' || value.trim().length === 0) {
     return fallbackHours;

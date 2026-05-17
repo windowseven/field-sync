@@ -1,26 +1,7 @@
--- ╔══════════════════════════════════════════════════════════════╗
--- ║   ⚠️  DESTRUCTIVE — DROPS ALL TABLES ON EXECUTION           ║
--- ║   This file is for DEVELOPMENT RESET only.                  ║
--- ║   For production, use: npm run migrate                      ║
--- ║   which applies versioned migrations safely.                ║
--- ╚══════════════════════════════════════════════════════════════╝
+-- 001-initial-schema.sql
+-- Creates all core tables with IF NOT EXISTS guards.
+-- This migration is idempotent — safe to run multiple times.
 
-SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS user_locations;
-DROP TABLE IF EXISTS team_members;
-DROP TABLE IF EXISTS tasks;
-DROP TABLE IF EXISTS submissions;
-DROP TABLE IF EXISTS help_requests;
-DROP TABLE IF EXISTS notifications;
-DROP TABLE IF EXISTS audit_logs;
-DROP TABLE IF EXISTS zones;
-DROP TABLE IF EXISTS teams;
-DROP TABLE IF EXISTS forms;
-DROP TABLE IF EXISTS projects;
-DROP TABLE IF EXISTS users;
-SET FOREIGN_KEY_CHECKS = 1;
-
--- Users Table
 CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(36) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -43,7 +24,6 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Latest known location for each user (for live map)
 CREATE TABLE IF NOT EXISTS user_locations (
   user_id VARCHAR(36) PRIMARY KEY,
   lat DOUBLE NOT NULL,
@@ -53,7 +33,6 @@ CREATE TABLE IF NOT EXISTS user_locations (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- GPS location history for route/path tracking
 CREATE TABLE IF NOT EXISTS user_location_history (
   id VARCHAR(36) PRIMARY KEY,
   user_id VARCHAR(36) NOT NULL,
@@ -65,7 +44,6 @@ CREATE TABLE IF NOT EXISTS user_location_history (
   INDEX idx_user_recorded (user_id, recorded_at DESC)
 );
 
--- Projects Table
 CREATE TABLE IF NOT EXISTS projects (
   id VARCHAR(36) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -81,17 +59,16 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Zones Table
 CREATE TABLE IF NOT EXISTS zones (
   id VARCHAR(36) PRIMARY KEY,
   project_id VARCHAR(36) NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  boundaries JSON, -- Storing GPS coordinates/polygons
+  boundaries JSON,
+  assignment_mode ENUM('individual', 'group') DEFAULT 'individual',
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
--- Teams Table
 CREATE TABLE IF NOT EXISTS teams (
   id VARCHAR(36) PRIMARY KEY,
   project_id VARCHAR(36) NOT NULL,
@@ -103,7 +80,6 @@ CREATE TABLE IF NOT EXISTS teams (
   FOREIGN KEY (leader_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Team Members Table (Many-to-Many)
 CREATE TABLE IF NOT EXISTS team_members (
   team_id VARCHAR(36) NOT NULL,
   user_id VARCHAR(36) NOT NULL,
@@ -112,13 +88,12 @@ CREATE TABLE IF NOT EXISTS team_members (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Forms Table (Templates)
 CREATE TABLE IF NOT EXISTS forms (
   id VARCHAR(36) PRIMARY KEY,
   project_id VARCHAR(36),
   title VARCHAR(255) NOT NULL,
   description TEXT,
-  form_schema JSON NOT NULL, -- Steps and fields definition
+  form_schema JSON NOT NULL,
   status ENUM('draft', 'published') DEFAULT 'draft',
   assigned_by VARCHAR(36),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -126,7 +101,6 @@ CREATE TABLE IF NOT EXISTS forms (
   FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Tasks Table
 CREATE TABLE IF NOT EXISTS tasks (
   id VARCHAR(36) PRIMARY KEY,
   project_id VARCHAR(36) NOT NULL,
@@ -150,15 +124,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Submissions Table
 CREATE TABLE IF NOT EXISTS submissions (
   id VARCHAR(36) PRIMARY KEY,
   form_id VARCHAR(36) NOT NULL,
   user_id VARCHAR(36) NOT NULL,
   project_id VARCHAR(36) NOT NULL,
   zone_id VARCHAR(36),
-  data JSON NOT NULL, -- The actual responses
-  location JSON, -- Lat/Lng of submission
+  data JSON NOT NULL,
+  location JSON,
   status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
   submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE,
@@ -167,9 +140,6 @@ CREATE TABLE IF NOT EXISTS submissions (
   FOREIGN KEY (zone_id) REFERENCES zones(id) ON DELETE SET NULL
 );
 
-
-
--- Help Requests Table
 CREATE TABLE IF NOT EXISTS help_requests (
   id VARCHAR(36) PRIMARY KEY,
   user_id VARCHAR(36) NOT NULL,
@@ -184,7 +154,6 @@ CREATE TABLE IF NOT EXISTS help_requests (
   FOREIGN KEY (response_from) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Audit Logs Table
 CREATE TABLE IF NOT EXISTS audit_logs (
   id VARCHAR(36) PRIMARY KEY,
   user_id VARCHAR(36),
@@ -202,7 +171,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Notifications Table
 CREATE TABLE IF NOT EXISTS notifications (
   id VARCHAR(36) PRIMARY KEY,
   user_id VARCHAR(36) NOT NULL,
@@ -222,7 +190,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
 );
 
--- User Preferences Table
 CREATE TABLE IF NOT EXISTS user_preferences (
   user_id VARCHAR(36) PRIMARY KEY,
   bio TEXT,
@@ -239,7 +206,6 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Global App Settings Table
 CREATE TABLE IF NOT EXISTS app_settings (
   setting_key VARCHAR(100) PRIMARY KEY,
   setting_value JSON NOT NULL,
@@ -248,7 +214,6 @@ CREATE TABLE IF NOT EXISTS app_settings (
   FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Broadcasts Table
 CREATE TABLE IF NOT EXISTS broadcasts (
   id VARCHAR(36) PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
@@ -260,7 +225,6 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   FOREIGN KEY (sent_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Broadcast Deliveries Table
 CREATE TABLE IF NOT EXISTS broadcast_deliveries (
   broadcast_id VARCHAR(36) NOT NULL,
   user_id VARCHAR(36) NOT NULL,
@@ -272,7 +236,6 @@ CREATE TABLE IF NOT EXISTS broadcast_deliveries (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Emergency Actions Table
 CREATE TABLE IF NOT EXISTS emergency_actions (
   id VARCHAR(36) PRIMARY KEY,
   control_key VARCHAR(100) NOT NULL,
@@ -284,43 +247,6 @@ CREATE TABLE IF NOT EXISTS emergency_actions (
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Create indexes
-CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp);
-CREATE INDEX idx_audit_logs_target ON audit_logs(target_type, target_id);
-CREATE INDEX idx_audit_logs_category ON audit_logs(category);
-CREATE INDEX idx_notifications_user_status ON notifications(user_id, status);
-CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
-CREATE INDEX idx_broadcasts_sent_at ON broadcasts(sent_at);
-CREATE INDEX idx_broadcast_deliveries_user ON broadcast_deliveries(user_id);
-CREATE INDEX idx_broadcast_deliveries_status ON broadcast_deliveries(status);
-CREATE INDEX idx_broadcast_deliveries_broadcast ON broadcast_deliveries(broadcast_id);
-CREATE INDEX idx_emergency_actions_created_at ON emergency_actions(created_at);
-
--- Performance indexes for scalability
-CREATE INDEX idx_tasks_assigned_to ON tasks(assigned_to);
-CREATE INDEX idx_tasks_project_id ON tasks(project_id);
-CREATE INDEX idx_tasks_status ON tasks(status);
-CREATE INDEX idx_tasks_project_status ON tasks(project_id, status);
-CREATE INDEX idx_submissions_project_id ON submissions(project_id);
-CREATE INDEX idx_submissions_user_id ON submissions(user_id);
-CREATE INDEX idx_submissions_submitted_at ON submissions(submitted_at);
-CREATE INDEX idx_submissions_project_status ON submissions(project_id, status);
-CREATE INDEX idx_team_members_user_id ON team_members(user_id);
-CREATE INDEX idx_teams_leader_id ON teams(leader_id);
-CREATE INDEX idx_teams_project_id ON teams(project_id);
-CREATE INDEX idx_zones_project_id ON zones(project_id);
-CREATE INDEX idx_forms_project_id ON forms(project_id);
-CREATE INDEX idx_help_requests_user_id ON help_requests(user_id);
-CREATE INDEX idx_help_requests_status ON help_requests(status);
-CREATE INDEX idx_help_requests_user_status ON help_requests(user_id, status);
-CREATE INDEX idx_invite_links_code ON invite_links(code);
-CREATE INDEX idx_invite_links_status ON invite_links(status);
-CREATE INDEX idx_invite_links_project ON invite_links(project_id);
-CREATE INDEX idx_email_invites_token ON email_invites(token);
-CREATE INDEX idx_email_invites_email ON email_invites(email);
-CREATE INDEX idx_email_invites_project ON email_invites(project_id);
-CREATE INDEX idx_users_role_status ON users(role, status);
 CREATE TABLE IF NOT EXISTS invite_links (
   id VARCHAR(36) PRIMARY KEY,
   code VARCHAR(20) UNIQUE NOT NULL,
@@ -337,7 +263,6 @@ CREATE TABLE IF NOT EXISTS invite_links (
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
 );
 
--- Email Invites Table
 CREATE TABLE IF NOT EXISTS email_invites (
   id VARCHAR(36) PRIMARY KEY,
   email VARCHAR(255) NOT NULL,
@@ -354,3 +279,54 @@ CREATE TABLE IF NOT EXISTS email_invites (
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS team_messages (
+  id VARCHAR(36) PRIMARY KEY,
+  team_id VARCHAR(36) NOT NULL,
+  sender_id VARCHAR(36) NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_team_messages_team (team_id, created_at DESC)
+);
+
+CREATE TABLE IF NOT EXISTS sub_zone_assignments (
+  id VARCHAR(36) PRIMARY KEY,
+  zone_id VARCHAR(36) NOT NULL,
+  user_id VARCHAR(36) NOT NULL,
+  boundaries JSON,
+  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_sub_zone_zone (zone_id),
+  INDEX idx_sub_zone_user (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS field_issues (
+  id VARCHAR(36) PRIMARY KEY,
+  team_id VARCHAR(36) NOT NULL,
+  reported_by VARCHAR(36) NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  severity ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
+  affected_zone_id VARCHAR(36) NULL,
+  status ENUM('active', 'redirected', 'paused', 'resumed', 'resolved') DEFAULT 'active',
+  response_note TEXT NULL,
+  redirect_zone_id VARCHAR(36) NULL,
+  resolved_by VARCHAR(36) NULL,
+  resolved_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_field_issues_team (team_id, status),
+  INDEX idx_field_issues_created (created_at DESC)
+);
+
+CREATE TABLE IF NOT EXISTS contact_inquiries (
+  id VARCHAR(36) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  subject VARCHAR(100) NOT NULL,
+  message TEXT NOT NULL,
+  status ENUM('new', 'read', 'responded', 'archived') DEFAULT 'new',
+  admin_response TEXT NULL,
+  responded_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_status_created (status, created_at DESC),
+  INDEX idx_email (email)
+);

@@ -24,7 +24,13 @@ if (
   window.location.href = window.location.href.replace("http:", "https:");
 }
 
-// ─── Refresh lock (prevents multiple concurrent refresh calls) ─
+// ─── Refresh retry queue (state machine) ──────────────────────
+// When multiple requests hit 401 simultaneously:
+//   1. First request acquires the lock (isRefreshing=true) and calls doRefresh()
+//   2. Subsequent requests queue their retry callback in pendingRequests[]
+//   3. On success: onTokenRefreshed drains the queue, each callback retries with new token
+//   4. On failure: queue is cleared, all callers get force-logout via fs:force-logout event
+// State transitions: idle → refreshing → (drained | cleared) → idle
 let isRefreshing = false;
 let pendingRequests: Array<(token: string) => void> = [];
 

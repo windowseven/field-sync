@@ -33,20 +33,22 @@ function mockReqRes() {
 }
 
 describe('auth endpoints', () => {
-  let login, forgotPassword, resendOtp, logout, refresh, verifyOtp, resetPassword, register;
+  let login, register, logout, refresh, forgotPassword, resendOtp, verifyOtp, resetPassword;
 
   beforeAll(async () => {
     process.env.JWT_SECRET = TEST_SECRET;
     process.env.JWT_REFRESH_SECRET = TEST_SECRET + '-refresh';
-    const mod = await import('../controllers/authController.js');
-    login = mod.login;
-    forgotPassword = mod.forgotPassword;
-    resendOtp = mod.resendOtp;
-    logout = mod.logout;
-    refresh = mod.refresh;
-    verifyOtp = mod.verifyOtp;
-    resetPassword = mod.resetPassword;
-    register = mod.register;
+    const auth = await import('../controllers/authController.js');
+    login = auth.login;
+    register = auth.register;
+    logout = auth.logout;
+    refresh = auth.refresh;
+    const otp = await import('../controllers/otpController.js');
+    forgotPassword = otp.forgotPassword;
+    resendOtp = otp.resendOtp;
+    verifyOtp = otp.verifyOtp;
+    const pwd = await import('../controllers/passwordController.js');
+    resetPassword = pwd.resetPassword;
   });
 
   afterAll(() => {

@@ -1,5 +1,7 @@
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
 const ADMIN_RANGE_CONFIG = {
   day: { periods: 24, intervalSql: 'INTERVAL 24 HOUR', bucketKind: 'hour' },
@@ -80,8 +82,7 @@ function mergeSeriesCounts(series, rows, fieldName) {
   }
 }
 
-export const getAdminAnalytics = async (req, res) => {
-  try {
+export const getAdminAnalytics = asyncHandler(async (req, res) => {
     const range = normalizeRange(req.query.range);
     const { intervalSql, bucketKind } = ADMIN_RANGE_CONFIG[range];
 
@@ -234,20 +235,15 @@ export const getAdminAnalytics = async (req, res) => {
         teamPerformance,
       }
     });
-  } catch (error) {
-    logger.error('Admin analytics error:', error);
-    res.status(500).json({ status: 'error', message: 'Analytics failed' });
-  }
 };
 
-export const getProjectAnalytics = async (req, res) => {
-  try {
+export const getProjectAnalytics = asyncHandler(async (req, res) => {
     const { projectId } = req.params;
 
     const [projects] = await pool.query('SELECT * FROM projects WHERE id = ?', [projectId]);
     const project = projects[0];
     if (!project) {
-      return res.status(404).json({ status: 'error', message: 'Project not found' });
+      throw new AppError('Project not found', 404);
     }
 
     const [submissions] = await pool.query(`
@@ -295,14 +291,9 @@ export const getProjectAnalytics = async (req, res) => {
         teamMetrics
       }
     });
-  } catch (error) {
-    logger.error('Project analytics error:', error);
-    res.status(500).json({ status: 'error', message: 'Analytics failed' });
-  }
 };
 
-export const getTeamLeaderStats = async (req, res) => {
-  try {
+export const getTeamLeaderStats = asyncHandler(async (req, res) => {
     const userId = req.user.id;
 
     const [teams] = await pool.query(`
@@ -314,7 +305,7 @@ export const getTeamLeaderStats = async (req, res) => {
     const team = teams[0];
 
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'No team found' });
+      throw new AppError('No team found', 404);
     }
 
     const [members] = await pool.query(`
@@ -350,9 +341,5 @@ export const getTeamLeaderStats = async (req, res) => {
         formsSummary
       }
     });
-  } catch (error) {
-    logger.error('Team leader stats error:', error);
-    res.status(500).json({ status: 'error', message: 'Stats failed' });
-  }
 };
 

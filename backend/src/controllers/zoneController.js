@@ -3,28 +3,24 @@ import logger from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from './auditLogController.js';
 import { emitToUser } from '../sockets/wsServer.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const getZonesByProject = async (req, res) => {
-  try {
+export const getZonesByProject = asyncHandler(async (req, res) => {
     const { projectId } = req.params;
     const [rows] = await pool.query(
       'SELECT * FROM zones WHERE project_id = ? ORDER BY name ASC',
       [projectId]
     );
     res.json({ status: 'success', results: rows.length, data: { zones: rows } });
-  } catch (error) {
-    logger.error('Get zones error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const createZone = async (req, res) => {
-  try {
+export const createZone = asyncHandler(async (req, res) => {
     const { projectId } = req.params;
     const { name, description, boundaries } = req.body;
 
     if (!name) {
-      return res.status(400).json({ status: 'error', message: 'Zone name is required' });
+      throw new AppError('Zone name is required', 400);
     }
 
     const id = uuidv4();
@@ -41,20 +37,15 @@ export const createZone = async (req, res) => {
 
     const [rows] = await pool.query('SELECT * FROM zones WHERE id = ?', [id]);
     res.status(201).json({ status: 'success', data: { zone: rows[0] } });
-  } catch (error) {
-    logger.error('Create zone error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const updateZone = async (req, res) => {
-  try {
+export const updateZone = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { name, description, boundaries } = req.body;
 
     const [existingRows] = await pool.query('SELECT * FROM zones WHERE id = ?', [id]);
     const existing = existingRows[0];
-    if (!existing) return res.status(404).json({ status: 'error', message: 'Zone not found' });
+    if (!existing) throw new AppError('Zone not found', 404);
 
     await pool.query(
       'UPDATE zones SET name = ?, description = ?, boundaries = ? WHERE id = ?',
@@ -74,21 +65,16 @@ export const updateZone = async (req, res) => {
 
     const [rows] = await pool.query('SELECT * FROM zones WHERE id = ?', [id]);
     res.json({ status: 'success', data: { zone: rows[0] } });
-  } catch (error) {
-    logger.error('Update zone error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const deleteZone = async (req, res) => {
-  try {
+export const deleteZone = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const [existingRows] = await pool.query('SELECT * FROM zones WHERE id = ?', [id]);
     const existing = existingRows[0];
-    if (!existing) return res.status(404).json({ status: 'error', message: 'Zone not found' });
+    if (!existing) throw new AppError('Zone not found', 404);
 
     const [result] = await pool.query('DELETE FROM zones WHERE id = ?', [id]);
-    if (result?.affectedRows === 0) return res.status(404).json({ status: 'error', message: 'Zone not found' });
+    if (result?.affectedRows === 0) throw new AppError('Zone not found', 404);
 
     await logAudit(req.user.id, 'zone.delete', {
       zone_id: id,
@@ -97,24 +83,19 @@ export const deleteZone = async (req, res) => {
     });
 
     res.json({ status: 'success' });
-  } catch (error) {
-    logger.error('Delete zone error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const setZoneAssignmentMode = async (req, res) => {
-  try {
+export const setZoneAssignmentMode = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { mode } = req.body;
 
     if (!['individual', 'group'].includes(mode)) {
-      return res.status(400).json({ status: 'error', message: 'mode must be individual or group' });
+      throw new AppError('mode must be individual or group', 400);
     }
 
     const [existingRows] = await pool.query('SELECT * FROM zones WHERE id = ?', [id]);
     const existing = existingRows[0];
-    if (!existing) return res.status(404).json({ status: 'error', message: 'Zone not found' });
+    if (!existing) throw new AppError('Zone not found', 404);
 
     await pool.query('UPDATE zones SET assignment_mode = ? WHERE id = ?', [mode, id]);
 
@@ -125,27 +106,22 @@ export const setZoneAssignmentMode = async (req, res) => {
     });
 
     res.json({ status: 'success', data: { zone_id: id, mode } });
-  } catch (error) {
-    logger.error('Set zone assignment mode error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const assignSubZone = async (req, res) => {
-  try {
+export const assignSubZone = asyncHandler(async (req, res) => {
     const { zone_id, user_id, boundaries } = req.body;
 
     if (!zone_id || !user_id) {
-      return res.status(400).json({ status: 'error', message: 'zone_id and user_id are required' });
+      throw new AppError('zone_id and user_id are required', 400);
     }
 
     const [zoneRows] = await pool.query('SELECT * FROM zones WHERE id = ?', [zone_id]);
     const zone = zoneRows[0];
-    if (!zone) return res.status(404).json({ status: 'error', message: 'Zone not found' });
+    if (!zone) throw new AppError('Zone not found', 404);
 
     const [userRows] = await pool.query('SELECT id, name FROM users WHERE id = ?', [user_id]);
     const user = userRows[0];
-    if (!user) return res.status(404).json({ status: 'error', message: 'User not found' });
+    if (!user) throw new AppError('User not found', 404);
 
     const id = uuidv4();
     await pool.query(
@@ -176,14 +152,9 @@ export const assignSubZone = async (req, res) => {
         boundaries,
       },
     });
-  } catch (error) {
-    logger.error('Assign sub-zone error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const getSubZoneAssignments = async (req, res) => {
-  try {
+export const getSubZoneAssignments = asyncHandler(async (req, res) => {
     const { zoneId } = req.params;
 
     const [rows] = await pool.query(
@@ -201,19 +172,14 @@ export const getSubZoneAssignments = async (req, res) => {
     }));
 
     res.json({ status: 'success', data: { assignments: parsed } });
-  } catch (error) {
-    logger.error('Get sub-zone assignments error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const removeSubZoneAssignment = async (req, res) => {
-  try {
+export const removeSubZoneAssignment = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
     const [existingRows] = await pool.query('SELECT * FROM sub_zone_assignments WHERE id = ?', [id]);
     const existing = existingRows[0];
-    if (!existing) return res.status(404).json({ status: 'error', message: 'Assignment not found' });
+    if (!existing) throw new AppError('Assignment not found', 404);
 
     await pool.query('DELETE FROM sub_zone_assignments WHERE id = ?', [id]);
 
@@ -224,8 +190,4 @@ export const removeSubZoneAssignment = async (req, res) => {
     });
 
     res.json({ status: 'success', message: 'Assignment removed' });
-  } catch (error) {
-    logger.error('Remove sub-zone assignment error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});

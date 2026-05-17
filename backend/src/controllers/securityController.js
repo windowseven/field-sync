@@ -5,6 +5,8 @@ import { getApiMonitorSnapshot } from '../utils/requestMetrics.js';
 import { getRateLimitSnapshot } from '../utils/rateLimitMetrics.js';
 import { getConnectedClientsSnapshot } from '../sockets/wsServer.js';
 import { getSecurityPolicies } from '../utils/securityPolicyStore.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
 function round(value, digits = 1) {
   const factor = 10 ** digits;
@@ -272,8 +274,7 @@ function getPolicySnapshot() {
   };
 }
 
-export const getAdminSecuritySnapshot = async (req, res) => {
-  try {
+export const getAdminSecuritySnapshot = asyncHandler(async (req, res) => {
     const [threats, websocketSnapshot] = await Promise.all([
       getSecurityThreatData(),
       Promise.resolve(getConnectedClientsSnapshot()),
@@ -335,8 +336,4 @@ export const getAdminSecuritySnapshot = async (req, res) => {
         policies,
       },
     });
-  } catch (error) {
-    logger.error(`Security snapshot error: ${error.message}`);
-    res.status(500).json({ status: 'error', message: 'Failed to load security metrics' });
-  }
-};
+});

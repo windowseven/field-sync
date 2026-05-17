@@ -2,14 +2,15 @@ import pool from '../config/database.js';
 import logger from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { broadcastToRoles } from '../sockets/wsServer.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const updateLocation = async (req, res) => {
-  try {
+export const updateLocation = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const { lat, lng, accuracy, project_id } = req.body;
 
     if (lat == null || lng == null) {
-      return res.status(400).json({ status: 'error', message: 'lat and lng are required' });
+      throw new AppError('lat and lng are required', 400);
     }
 
     const acc = accuracy ?? 15;
@@ -36,14 +37,9 @@ export const updateLocation = async (req, res) => {
     });
 
     res.json({ status: 'success', data: { lat, lng, accuracy: acc, updated_at: new Date() } });
-  } catch (error) {
-    logger.error('Update location error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const getLatestLocations = async (req, res) => {
-  try {
+export const getLatestLocations = asyncHandler(async (req, res) => {
     const [rows] = await pool.query(
       `SELECT
         ul.user_id,
@@ -63,14 +59,9 @@ export const getLatestLocations = async (req, res) => {
     );
 
     res.json({ status: 'success', data: { locations: rows } });
-  } catch (error) {
-    logger.error('Get locations error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const getProjectLocations = async (req, res) => {
-  try {
+export const getProjectLocations = asyncHandler(async (req, res) => {
     const { projectId } = req.params;
 
     const [rows] = await pool.query(
@@ -96,14 +87,9 @@ export const getProjectLocations = async (req, res) => {
     );
 
     res.json({ status: 'success', data: { locations: rows } });
-  } catch (error) {
-    logger.error('Get project locations error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const getMyLocationHistory = async (req, res) => {
-  try {
+export const getMyLocationHistory = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const hours = Math.min(parseInt(req.query.hours || '24', 10), 72);
 
@@ -116,19 +102,14 @@ export const getMyLocationHistory = async (req, res) => {
     );
 
     res.json({ status: 'success', data: { history: rows, hours } });
-  } catch (error) {
-    logger.error('Get location history error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const getTeamMovementPaths = async (req, res) => {
-  try {
+export const getTeamMovementPaths = asyncHandler(async (req, res) => {
     const [teamRows] = await pool.query('SELECT id, project_id FROM teams WHERE leader_id = ?', [req.user.id]);
     const team = teamRows[0];
 
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'No team assigned' });
+      throw new AppError('No team assigned', 404);
     }
 
     const hours = Math.min(parseInt(req.query.hours || '4', 10), 24);
@@ -170,8 +151,4 @@ export const getTeamMovementPaths = async (req, res) => {
     const paths = Array.from(pathsMap.values());
 
     res.json({ status: 'success', data: { paths, hours } });
-  } catch (error) {
-    logger.error('Get team movement paths error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});

@@ -1,6 +1,7 @@
 import { httpServer } from './app.js';
 import { initializeDatabase } from './db/init.js';
-import { runMigration } from './db/migrate-indexes.js';
+import { runMigrations } from './db/migrate.js';
+import { cleanupOldData } from './utils/cleanupData.js';
 import logger from './utils/logger.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,14 +17,14 @@ const startServer = async () => {
   try {
     const allowDestructiveInit = process.env.DB_RESET_ON_INIT === 'true';
 
-    // 1. Initialize Database (Schema)
-    logger.info('Initializing database...');
-    await initializeDatabase({ allowDestructive: allowDestructiveInit });
-    logger.info('Database initialized successfully.');
-
-    logger.info('Running database index migration...');
-    await runMigration();
-    logger.info('Database index migration complete.');
+    if (allowDestructiveInit) {
+      logger.warn('⚠️  DB_RESET_ON_INIT is set! Running destructive database initialization...');
+      await initializeDatabase({ allowDestructive: true });
+    } else {
+      // Safe mode: run versioned migrations
+      logger.info('Running database migrations...');
+      await runMigrations();
+    }
 
     // 2. Start Next.js Frontend (Only in Production)
     if (isProduction) {
@@ -47,6 +48,10 @@ const startServer = async () => {
       logger.info(`⚡️[server]: Professional FieldSync Backend is running at http://localhost:${PORT}`);
       logger.info(`🚀 Mode: ${process.env.NODE_ENV || 'development'}`);
       if (isProduction) logger.info(`🌐 Frontend: Integrated via Next.js Standalone`);
+
+      // Run initial data cleanup, then schedule every 6 hours
+      cleanupOldData();
+      setInterval(() => cleanupOldData(), 6 * 60 * 60 * 1000);
     });
   } catch (error) {
     logger.error('CRITICAL: Failed to start server:', error);

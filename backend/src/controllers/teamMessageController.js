@@ -3,14 +3,15 @@ import logger from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { emitToUser } from '../sockets/wsServer.js';
 import { logAudit } from './auditLogController.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const getTeamMessages = async (req, res) => {
-  try {
+export const getTeamMessages = asyncHandler(async (req, res) => {
     const [teamRows] = await pool.query('SELECT id FROM teams WHERE leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)', [req.user.id, req.user.id]);
     const team = teamRows[0];
 
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'No team assigned' });
+      throw new AppError('No team assigned', 404);
     }
 
     const [rows] = await pool.query(
@@ -24,25 +25,20 @@ export const getTeamMessages = async (req, res) => {
     );
 
     res.json({ status: 'success', data: { messages: rows } });
-  } catch (error) {
-    logger.error('Get team messages error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const sendTeamMessage = async (req, res) => {
-  const { message } = req.body;
+export const sendTeamMessage = asyncHandler(async (req, res) => {
+    const { message } = req.body;
 
-  if (!message?.trim()) {
-    return res.status(400).json({ status: 'error', message: 'message is required' });
-  }
+    if (!message?.trim()) {
+      throw new AppError('message is required', 400);
+    }
 
-  try {
     const [teamRows] = await pool.query('SELECT id FROM teams WHERE leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)', [req.user.id, req.user.id]);
     const team = teamRows[0];
 
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'No team assigned' });
+      throw new AppError('No team assigned', 404);
     }
 
     const id = uuidv4();
@@ -79,8 +75,4 @@ export const sendTeamMessage = async (req, res) => {
     );
 
     res.status(201).json({ status: 'success', data: { message: newMsg[0] } });
-  } catch (error) {
-    logger.error('Send team message error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});

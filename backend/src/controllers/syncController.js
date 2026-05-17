@@ -2,21 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database.js';
 import { broadcastToRoles, emitToUser } from '../sockets/wsServer.js';
 import { checkZoneBoundary } from '../utils/zoneBoundary.js';
-
-function getUserRole(userId) {
-  if (userId.startsWith('admin-')) return 'admin';
-  if (userId.startsWith('sup-')) return 'supervisor';
-  if (userId.startsWith('tl-')) return 'team_leader';
-  return 'field_agent';
-}
-
-function getNotificationLink(userId) {
-  const role = getUserRole(userId);
-  if (role === 'admin') return '/admin/notifications';
-  if (role === 'supervisor') return '/supervisor/notifications';
-  if (role === 'team_leader') return '/teamleader/notifications';
-  return '/user/notifications';
-}
+import { getUserRole, getNotificationLink } from '../utils/roleHelpers.js';
 
 export const processBatch = async (req, res) => {
   const { submissions, updates, locations, items } = req.body;

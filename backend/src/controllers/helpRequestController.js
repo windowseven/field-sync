@@ -2,14 +2,15 @@ import pool from '../config/database.js';
 import logger from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from './auditLogController.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const createHelpRequest = async (req, res) => {
-  try {
+export const createHelpRequest = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const { type, message } = req.body;
 
     if (!type || !message) {
-      return res.status(400).json({ status: 'error', message: 'type and message are required' });
+      throw new AppError('type and message are required', 400);
     }
 
     const id = uuidv4();
@@ -27,28 +28,18 @@ export const createHelpRequest = async (req, res) => {
 
     const [rows] = await pool.query('SELECT * FROM help_requests WHERE id = ?', [id]);
     res.status(201).json({ status: 'success', data: { helpRequest: rows[0] } });
-  } catch (error) {
-    logger.error('Create help request error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const getMyHelpRequests = async (req, res) => {
-  try {
+export const getMyHelpRequests = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const [rows] = await pool.query(
       'SELECT * FROM help_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',
       [userId]
     );
     res.json({ status: 'success', data: { helpRequests: rows } });
-  } catch (error) {
-    logger.error('Get help requests error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const getPendingHelpRequests = async (req, res) => {
-  try {
+export const getPendingHelpRequests = asyncHandler(async (req, res) => {
     const [rows] = await pool.query(
       `SELECT hr.*, u.name as user_name, u.email as user_email
        FROM help_requests hr
@@ -58,14 +49,9 @@ export const getPendingHelpRequests = async (req, res) => {
        LIMIT 200`
     );
     res.json({ status: 'success', data: { helpRequests: rows } });
-  } catch (error) {
-    logger.error('Get pending help requests error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const respondToHelpRequest = async (req, res) => {
-  try {
+export const respondToHelpRequest = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { response, note } = req.body;
 
@@ -77,7 +63,7 @@ export const respondToHelpRequest = async (req, res) => {
     };
 
     if (!validResponses.includes(response)) {
-      return res.status(400).json({ status: 'error', message: 'response must be accepted, rejected, or escalated' });
+      throw new AppError('response must be accepted, rejected, or escalated', 400);
     }
 
     const status = statusMap[response];
@@ -88,7 +74,7 @@ export const respondToHelpRequest = async (req, res) => {
     );
 
     if (result?.affectedRows === 0) {
-      return res.status(404).json({ status: 'error', message: 'Help request not found' });
+      throw new AppError('Help request not found', 404);
     }
 
     const [rows] = await pool.query(
@@ -107,8 +93,4 @@ export const respondToHelpRequest = async (req, res) => {
     });
 
     res.json({ status: 'success', data: { helpRequest: rows[0] } });
-  } catch (error) {
-    logger.error('Respond help request error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };

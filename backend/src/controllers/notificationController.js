@@ -1,8 +1,9 @@
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const getNotifications = async (req, res) => {
-  try {
+export const getNotifications = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const page = Math.max(1, parseInt(req.query.page || '1', 10));
     const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
@@ -31,14 +32,9 @@ export const getNotifications = async (req, res) => {
         },
       },
     });
-  } catch (error) {
-    logger.error('Get notifications error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const markAsRead = async (req, res) => {
-  try {
+export const markAsRead = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     const [result] = await pool.query(
@@ -47,28 +43,18 @@ export const markAsRead = async (req, res) => {
     );
 
     if (result?.affectedRows === 0) {
-      return res.status(404).json({ status: 'error', message: 'Notification not found' });
+      throw new AppError('Notification not found', 404);
     }
     res.json({ status: 'success' });
-  } catch (error) {
-    logger.error('Mark notification read error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const markAllAsRead = async (req, res) => {
-  try {
+export const markAllAsRead = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     await pool.query('UPDATE notifications SET status = "read", read_at = NOW() WHERE user_id = ? AND status = "unread"', [userId]);
     res.json({ status: 'success' });
-  } catch (error) {
-    logger.error('Mark all notifications read error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});
 
-export const getUnreadCount = async (req, res) => {
-  try {
+export const getUnreadCount = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const [rows] = await pool.query(
       'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND status = "unread"',
@@ -78,8 +64,4 @@ export const getUnreadCount = async (req, res) => {
       status: 'success',
       data: { unreadCount: rows[0].count }
     });
-  } catch (error) {
-    logger.error('Get unread count error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
-};
+});

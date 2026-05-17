@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import * as authController from '../controllers/authController.js';
+import * as otpController from '../controllers/otpController.js';
+import * as passwordController from '../controllers/passwordController.js';
 import * as projectController from '../controllers/projectController.js';
 import * as userController from '../controllers/userController.js';
 import * as syncController from '../controllers/syncController.js';
@@ -21,6 +23,8 @@ import * as maintenanceController from '../controllers/maintenanceController.js'
 import * as securityController from '../controllers/securityController.js';
 
 import * as contactController from '../controllers/contactController.js';
+import * as emergencyController from '../controllers/emergencyController.js';
+import * as broadcastController from '../controllers/broadcastController.js';
 import { authenticateToken, authorizeRole, enforcePlatformControls } from '../middlewares/auth.js';
 import { validate, schemas } from '../middlewares/validationMiddleware.js';
 
@@ -32,10 +36,10 @@ const router = Router();
 router.post('/auth/login', validate(schemas.login), authController.login);
 router.post('/auth/register', validate(schemas.register), authController.register);
 router.post('/auth/refresh', authController.refresh);
-router.post('/auth/forgot-password', authController.forgotPassword);
-router.post('/auth/verify-otp', authController.verifyOtp);
-router.post('/auth/reset-password', authController.resetPassword);
-router.post('/auth/resend-otp', authController.resendOtp);
+router.post('/auth/forgot-password', otpController.forgotPassword);
+router.post('/auth/verify-otp', otpController.verifyOtp);
+router.post('/auth/reset-password', passwordController.resetPassword);
+router.post('/auth/resend-otp', otpController.resendOtp);
 router.post('/auth/logout', authenticateToken, authController.logout);
 
 // ══════════════════════════════════════════════════════════════

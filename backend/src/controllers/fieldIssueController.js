@@ -3,20 +3,21 @@ import logger from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from './auditLogController.js';
 import { emitToUser, broadcast } from '../sockets/wsServer.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const createFieldIssue = async (req, res) => {
-  const { type, title, description, severity, affected_zone_id } = req.body;
+export const createFieldIssue = asyncHandler(async (req, res) => {
+    const { type, title, description, severity, affected_zone_id } = req.body;
 
-  if (!type || !title) {
-    return res.status(400).json({ status: 'error', message: 'type and title are required' });
-  }
+    if (!type || !title) {
+      throw new AppError('type and title are required', 400);
+    }
 
-  try {
     const [teamRows] = await pool.query('SELECT id, project_id FROM teams WHERE leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)', [req.user.id, req.user.id]);
     const team = teamRows[0];
 
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'No team assigned' });
+      throw new AppError('No team assigned', 404);
     }
 
     const id = uuidv4();
@@ -60,19 +61,14 @@ export const createFieldIssue = async (req, res) => {
     );
 
     res.status(201).json({ status: 'success', data: { issue: rows[0] } });
-  } catch (error) {
-    logger.error('Create field issue error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const getTeamFieldIssues = async (req, res) => {
-  try {
+export const getTeamFieldIssues = asyncHandler(async (req, res) => {
     const [teamRows] = await pool.query('SELECT id FROM teams WHERE leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)', [req.user.id, req.user.id]);
     const team = teamRows[0];
 
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'No team assigned' });
+      throw new AppError('No team assigned', 404);
     }
 
     const statusFilter = req.query.status || 'all';
@@ -83,26 +79,21 @@ export const getTeamFieldIssues = async (req, res) => {
     const [rows] = statusFilter === 'all' ? await pool.query(query, [team.id]) : await pool.query(query, [team.id, statusFilter]);
 
     res.json({ status: 'success', data: { issues: rows } });
-  } catch (error) {
-    logger.error('Get field issues error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const respondToFieldIssue = async (req, res) => {
-  const { id } = req.params;
-  const { action, note, redirect_zone_id } = req.body;
+export const respondToFieldIssue = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { action, note, redirect_zone_id } = req.body;
 
-  if (!['redirect', 'pause', 'resume', 'resolve'].includes(action)) {
-    return res.status(400).json({ status: 'error', message: 'action must be redirect, pause, resume, or resolve' });
-  }
+    if (!['redirect', 'pause', 'resume', 'resolve'].includes(action)) {
+      throw new AppError('action must be redirect, pause, resume, or resolve', 400);
+    }
 
-  try {
     const [issueRows] = await pool.query('SELECT * FROM field_issues WHERE id = ?', [id]);
     const issue = issueRows[0];
 
     if (!issue) {
-      return res.status(404).json({ status: 'error', message: 'Field issue not found' });
+      throw new AppError('Field issue not found', 404);
     }
 
     const statusMap = {
@@ -144,19 +135,14 @@ export const respondToFieldIssue = async (req, res) => {
     );
 
     res.json({ status: 'success', data: { issue: updatedRows[0] } });
-  } catch (error) {
-    logger.error('Respond to field issue error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
-export const getActiveIssues = async (req, res) => {
-  try {
+export const getActiveIssues = asyncHandler(async (req, res) => {
     const [teamRows] = await pool.query('SELECT id FROM teams WHERE leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)', [req.user.id, req.user.id]);
     const team = teamRows[0];
 
     if (!team) {
-      return res.status(404).json({ status: 'error', message: 'No team assigned' });
+      throw new AppError('No team assigned', 404);
     }
 
     const [rows] = await pool.query(
@@ -169,8 +155,4 @@ export const getActiveIssues = async (req, res) => {
     );
 
     res.json({ status: 'success', data: { activeIssues: rows } });
-  } catch (error) {
-    logger.error('Get active issues error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };

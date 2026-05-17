@@ -77,7 +77,7 @@ export const enforcePlatformControls = async (req, res, next) => {
 
     next();
   } catch (error) {
-    logger.error('Platform controls check error:', error);
+    logger.warn('Platform controls check failed — allowing request in degraded mode:', error.message);
     next();
   }
 };

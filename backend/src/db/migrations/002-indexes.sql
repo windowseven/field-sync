@@ -1,0 +1,41 @@
+-- 002-indexes.sql
+-- Performance indexes for core tables. Idempotent — uses IF NOT EXISTS / Duplicate-safe.
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON audit_logs(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_category ON audit_logs(category);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_broadcasts_sent_at ON broadcasts(sent_at);
+CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_user ON broadcast_deliveries(user_id);
+CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_status ON broadcast_deliveries(status);
+CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_broadcast ON broadcast_deliveries(broadcast_id);
+CREATE INDEX IF NOT EXISTS idx_emergency_actions_created_at ON emergency_actions(created_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_submissions_project_id ON submissions(project_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_user_id ON submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at ON submissions(submitted_at);
+CREATE INDEX IF NOT EXISTS idx_submissions_project_status ON submissions(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_team_members_user_id ON team_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_teams_leader_id ON teams(leader_id);
+CREATE INDEX IF NOT EXISTS idx_teams_project_id ON teams(project_id);
+CREATE INDEX IF NOT EXISTS idx_zones_project_id ON zones(project_id);
+CREATE INDEX IF NOT EXISTS idx_forms_project_id ON forms(project_id);
+CREATE INDEX IF NOT EXISTS idx_help_requests_user_id ON help_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_help_requests_status ON help_requests(status);
+CREATE INDEX IF NOT EXISTS idx_help_requests_user_status ON help_requests(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_invite_links_code ON invite_links(code);
+CREATE INDEX IF NOT EXISTS idx_invite_links_status ON invite_links(status);
+CREATE INDEX IF NOT EXISTS idx_invite_links_project ON invite_links(project_id);
+CREATE INDEX IF NOT EXISTS idx_invite_links_expires ON invite_links(expires_at);
+CREATE INDEX IF NOT EXISTS idx_email_invites_token ON email_invites(token);
+CREATE INDEX IF NOT EXISTS idx_email_invites_email ON email_invites(email);
+CREATE INDEX IF NOT EXISTS idx_email_invites_project ON email_invites(project_id);
+CREATE INDEX IF NOT EXISTS idx_email_invites_expires ON email_invites(expires_at);
+CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
+CREATE INDEX IF NOT EXISTS idx_user_locations_updated ON user_locations(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_location_history_recorded ON user_location_history(recorded_at DESC);

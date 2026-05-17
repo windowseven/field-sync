@@ -1,5 +1,6 @@
 const MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_RECENT_ERRORS = 50;
+const MAX_ENTRIES = 100000;
 
 const requestEntries = [];
 
@@ -7,6 +8,9 @@ function pruneOldRequests(now = Date.now()) {
   const cutoff = now - MAX_WINDOW_MS;
   while (requestEntries.length > 0 && requestEntries[0].timestamp < cutoff) {
     requestEntries.shift();
+  }
+  if (requestEntries.length > MAX_ENTRIES) {
+    requestEntries.splice(0, requestEntries.length - MAX_ENTRIES);
   }
 }
 

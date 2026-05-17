@@ -7,13 +7,15 @@ import { checkZoneBoundary } from '../utils/zoneBoundary.js';
 import { checkInactivityAlerts } from '../utils/inactivityAlerts.js';
 
 const clients = new Map();
+const userClients = new Map();
+const roleClients = new Map();
 const MAX_CONNECTIONS = parseInt(process.env.WS_MAX_CONNECTIONS || '500', 10);
 const HEARTBEAT_INTERVAL = 30000;
 const HEARTBEAT_TIMEOUT = 10000;
 const LOCATION_BROADCAST_THROTTLE_MS = parseInt(process.env.WS_LOCATION_THROTTLE_MS || '2000', 10);
 
 let lastLocationBroadcast = 0;
-let pendingLocationUpdate = null;
+const pendingLocationUpdates = new Map();
 
 function safeJsonSend(ws, payload) {
   try {
@@ -21,7 +23,6 @@ function safeJsonSend(ws, payload) {
       ws.send(JSON.stringify(payload));
     }
   } catch {
-    // ignore send failures
   }
 }
 
@@ -55,12 +56,44 @@ function verifyToken(token) {
   }
 }
 
+function indexClient(ws, client) {
+  clients.set(ws, client);
+
+  let byUser = userClients.get(client.user.id);
+  if (!byUser) {
+    byUser = new Set();
+    userClients.set(client.user.id, byUser);
+  }
+  byUser.add(ws);
+
+  let byRole = roleClients.get(client.user.role);
+  if (!byRole) {
+    byRole = new Set();
+    roleClients.set(client.user.role, byRole);
+  }
+  byRole.add(ws);
+}
+
+function deindexClient(ws, client) {
+  clients.delete(ws);
+
+  const byUser = userClients.get(client.user.id);
+  if (byUser) {
+    byUser.delete(ws);
+    if (byUser.size === 0) userClients.delete(client.user.id);
+  }
+
+  const byRole = roleClients.get(client.user.role);
+  if (byRole) {
+    byRole.delete(ws);
+    if (byRole.size === 0) roleClients.delete(client.user.role);
+  }
+}
+
 function removeClient(ws) {
   const client = clients.get(ws);
   if (client) {
-    if (client.heartbeatTimer) clearInterval(client.heartbeatTimer);
-    if (client.timeoutTimer) clearTimeout(client.timeoutTimer);
-    clients.delete(ws);
+    deindexClient(ws, client);
     logger.info(`[WS] Disconnected ${client.user.email} (${client.user.role})`);
   }
 }
@@ -108,7 +141,7 @@ async function handleClientMessage(client, raw) {
       await checkZoneBoundary(client.user.id, lat, lng);
 
       const now = Date.now();
-      pendingLocationUpdate = {
+      pendingLocationUpdates.set(client.user.id, {
         user_id: client.user.id,
         name: client.user.email,
         role: client.user.role,
@@ -117,7 +150,7 @@ async function handleClientMessage(client, raw) {
         accuracy: acc,
         project_id,
         ts: now,
-      };
+      });
 
       if (now - lastLocationBroadcast >= LOCATION_BROADCAST_THROTTLE_MS) {
         flushLocationBroadcast();
@@ -132,15 +165,20 @@ async function handleClientMessage(client, raw) {
 }
 
 function flushLocationBroadcast() {
-  if (!pendingLocationUpdate) return;
-  const data = pendingLocationUpdate;
-  pendingLocationUpdate = null;
+  if (pendingLocationUpdates.size === 0) return;
+  const updates = Array.from(pendingLocationUpdates.values());
+  pendingLocationUpdates.clear();
   lastLocationBroadcast = Date.now();
 
-  const roleSet = new Set(['admin', 'supervisor', 'team_leader']);
-  for (const [, client] of clients) {
-    if (!roleSet.has(client.user.role)) continue;
-    safeJsonSend(client.ws, { type: 'location:update', data });
+  const targets = new Set();
+  for (const role of ['admin', 'supervisor', 'team_leader']) {
+    const byRole = roleClients.get(role);
+    if (byRole) {
+      for (const ws of byRole) targets.add(ws);
+    }
+  }
+  for (const ws of targets) {
+    safeJsonSend(ws, { type: 'location:batch', data: updates });
   }
 }
 
@@ -159,7 +197,7 @@ function startHeartbeatChecks() {
   }, HEARTBEAT_INTERVAL);
 
   setInterval(() => {
-    if (pendingLocationUpdate) {
+    if (pendingLocationUpdates.size > 0) {
       flushLocationBroadcast();
     }
   }, LOCATION_BROADCAST_THROTTLE_MS);
@@ -205,11 +243,9 @@ export function setupWsServer(httpServer) {
       ws,
       user,
       lastPong: Date.now(),
-      heartbeatTimer: null,
-      timeoutTimer: null,
     };
 
-    clients.set(ws, client);
+    indexClient(ws, client);
     logger.info(`[WS] Connected ${user.email} (${user.role}) — total: ${clients.size}`);
 
     safeJsonSend(ws, { type: 'connected', data: { userId: user.id, role: user.role } });
@@ -233,17 +269,23 @@ export function setupWsServer(httpServer) {
 }
 
 export function emitToUser(userId, type, data) {
-  for (const [, client] of clients) {
-    if (client.user.id !== userId) continue;
-    safeJsonSend(client.ws, { type, data });
+  const byUser = userClients.get(userId);
+  if (!byUser) return;
+  for (const ws of byUser) {
+    safeJsonSend(ws, { type, data });
   }
 }
 
 export function broadcastToRoles(roles, type, data) {
-  const roleSet = new Set(roles);
-  for (const [, client] of clients) {
-    if (!roleSet.has(client.user.role)) continue;
-    safeJsonSend(client.ws, { type, data });
+  const targets = new Set();
+  for (const role of roles) {
+    const byRole = roleClients.get(role);
+    if (byRole) {
+      for (const ws of byRole) targets.add(ws);
+    }
+  }
+  for (const ws of targets) {
+    safeJsonSend(ws, { type, data });
   }
 }
 
@@ -255,11 +297,9 @@ export function broadcast(type, data) {
 
 export function getConnectedClientsSnapshot() {
   const byRole = {};
-
-  for (const [, client] of clients) {
-    byRole[client.user.role] = (byRole[client.user.role] || 0) + 1;
+  for (const [role, connections] of roleClients) {
+    byRole[role] = connections.size;
   }
-
   return {
     total: clients.size,
     byRole,

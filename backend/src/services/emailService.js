@@ -277,8 +277,7 @@ export const sendOtpEmail = async (email, otp, userName) => {
     await sendEmail({ to: email, subject, html });
     logger.info(`OTP email sent to ${email}`);
   } catch (error) {
-    logger.error(`Email send failed: ${error.message || error}`);
-    console.error(`[EMAIL] send failed to ${email}: ${error.message}`);
+    logger.error(`Email send failed to ${email}: ${error.message || error}`);
     throw new EmailDeliveryError('Unable to send verification email right now.', error);
   }
 };
@@ -290,8 +289,7 @@ export const sendResetEmail = async (email, token, userName) => {
     await sendEmail({ to: email, subject, html });
     logger.info(`Reset email sent to ${email}`);
   } catch (error) {
-    logger.error(`Reset email failed: ${error.message || error}`);
-    console.error(`[EMAIL] reset failed to ${email}: ${error.message}`);
+    logger.error(`Reset email failed to ${email}: ${error.message || error}`);
     throw error;
   }
 };
@@ -303,7 +301,6 @@ export const sendContactInquiryEmail = async ({ name, email, subject, message })
     logger.info(`Contact inquiry email sent to ${to}`);
   } catch (error) {
     logger.error(`Contact inquiry email failed: ${error.message || error}`);
-    console.error(`[EMAIL] contact inquiry failed: ${error.message}`);
     throw error;
   }
 };
@@ -314,8 +311,7 @@ export const sendInviteEmail = async (email, inviteUrl, role, team) => {
     await sendEmail({ to: email, subject, html });
     logger.info(`Invite email sent to ${email}`);
   } catch (error) {
-    logger.error(`Invite email failed: ${error.message || error}`);
-    console.error(`[EMAIL] invite failed to ${email}: ${error.message}`);
+    logger.error(`Invite email failed to ${email}: ${error.message || error}`);
     throw error;
   }
 };

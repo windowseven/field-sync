@@ -18,11 +18,6 @@ export function asyncHandler(fn) {
         logger.debug(error.stack);
       }
 
-      if (statusCode === 500) {
-        console.error(`${new Date().toISOString()} [${error.name}] ${error.message}`);
-        if (error.stack) console.error(error.stack);
-      }
-
       res.status(statusCode).json({
         status: 'error',
         message: statusCode === 500

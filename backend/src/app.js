@@ -318,11 +318,6 @@ app.use((err, req, res, next) => {
   const level = statusCode >= 500 ? 'error' : 'warn';
   logger[level](`[${reqId}] ${err.name}: ${err.message}`);
   if (err.stack && statusCode >= 500) logger.debug(err.stack);
-  if (statusCode >= 500) {
-    console.error(`${new Date().toISOString()} [${err.name}] ${err.message}`);
-    if (err.stack) console.error(err.stack);
-  }
-
   res.status(statusCode).json({
     status: statusCode >= 500 ? 'error' : 'fail',
     ...(code ? { code } : {}),

@@ -2,9 +2,10 @@ import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
 import { broadcastToRoles } from '../sockets/wsServer.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
-export const getAuditLogs = async (req, res) => {
-  try {
+export const getAuditLogs = asyncHandler(async (req, res) => {
     const limit = Math.min(Number(req.query.limit ?? 200), 500);
     const [rows] = await pool.query(
       `SELECT
@@ -18,10 +19,6 @@ export const getAuditLogs = async (req, res) => {
       [limit]
     );
     res.json({ status: 'success', data: { auditLogs: rows } });
-  } catch (error) {
-    logger.error('Get audit logs error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
-  }
 };
 
 function inferCategory(action = '') {
