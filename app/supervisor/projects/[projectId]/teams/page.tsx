@@ -26,8 +26,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { teamService } from '@/lib/api/teamService'
+import { projectService } from '@/lib/api/projectService'
 
 const statusColors = {
   active: { dot: 'bg-emerald-500', label: 'Active', badge: 'bg-emerald-500/10 text-emerald-500' },
@@ -61,6 +63,10 @@ export default function SupervisorTeamsPage({ params }: { params: Promise<{ proj
   const [teams, setTeams] = React.useState<TeamData[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [isCreating, setIsCreating] = React.useState(false)
+  const [teamName, setTeamName] = React.useState('')
+  const [leaderId, setLeaderId] = React.useState('')
+  const [projectUsers, setProjectUsers] = React.useState<any[]>([])
 
   const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
 
@@ -68,7 +74,11 @@ export default function SupervisorTeamsPage({ params }: { params: Promise<{ proj
     const fetchTeams = async () => {
       setIsLoading(true)
       try {
-        const projectTeams = await teamService.getByProject(projectId)
+        const [projectTeams, users] = await Promise.all([
+          teamService.getByProject(projectId),
+          projectService.getUsers(projectId).catch(() => []),
+        ])
+        setProjectUsers(users)
         const transformed = projectTeams.map((team: any, index: number) => ({
           id: team.id,
           name: team.name,
@@ -96,6 +106,48 @@ export default function SupervisorTeamsPage({ params }: { params: Promise<{ proj
     fetchTeams()
   }, [projectId])
 
+  const handleCreateTeam = async () => {
+    if (!teamName.trim()) {
+      toast({ title: 'Team name is required', variant: 'destructive' })
+      return
+    }
+    setIsCreating(true)
+    try {
+      await teamService.create({
+        project_id: projectId,
+        name: teamName.trim(),
+        leader_id: leaderId || undefined,
+      })
+      toast({ title: 'Team created successfully' })
+      setCreateOpen(false)
+      setTeamName('')
+      setLeaderId('')
+      const projectTeams = await teamService.getByProject(projectId)
+      const transformed = projectTeams.map((team: any, index: number) => ({
+        id: team.id,
+        name: team.name,
+        color: chartColors[index % chartColors.length],
+        zone: team.zone?.name || 'Unassigned',
+        status: team.status === 'active' ? 'active' as const : team.status === 'paused' ? 'paused' as const : 'idle' as const,
+        progress: Math.round((team.tasks_completed || 0) / ((team.tasks_completed || 0) + (team.tasks_pending || 1)) * 100),
+        leader: { name: team.leader?.name || 'Unassigned', email: team.leader?.email || '' },
+        members: (team.members || []).map((m: any) => ({
+          name: m.name,
+          status: m.status === 'active' ? 'active' as const : m.status === 'offline' ? 'offline' as const : 'idle' as const,
+          submissions: m.submissions || 0,
+        })),
+        tasksCompleted: team.tasks_completed || 0,
+        tasksPending: team.tasks_pending || 0,
+      }))
+      setTeams(transformed)
+    } catch (err) {
+      console.error('Failed to create team:', err)
+      toast({ title: 'Failed to create team', variant: 'destructive' })
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   const filtered = teams.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     t.leader.name.toLowerCase().includes(search.toLowerCase())
@@ -116,46 +168,42 @@ export default function SupervisorTeamsPage({ params }: { params: Promise<{ proj
               <h1 className="text-2xl font-bold tracking-tight">Teams</h1>
               <p className="text-muted-foreground">Manage field teams, assign leaders, and track performance</p>
             </div>
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) { setTeamName(''); setLeaderId('') } }}>
               <DialogTrigger asChild>
                 <Button><Plus className="h-4 w-4 mr-2" /> Create Team</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create New Team</DialogTitle>
-                  <DialogDescription>Set up a new field team for your project.</DialogDescription>
+                  <DialogDescription>Set up a new field team for this project.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
                   <div className="space-y-2">
                     <Label>Team Name</Label>
-                    <Input placeholder="e.g. Team Foxtrot" />
+                    <Input
+                      placeholder="e.g. Team Foxtrot"
+                      value={teamName}
+                      onChange={e => setTeamName(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Assign Team Leader</Label>
-                    <Select>
-                      <SelectTrigger><SelectValue placeholder="Select a team leader" /></SelectTrigger>
+                    <Select value={leaderId} onValueChange={setLeaderId}>
+                      <SelectTrigger><SelectValue placeholder="Select a team leader (optional)" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="sarah">Sarah Johnson</SelectItem>
-                        <SelectItem value="james">James Kariuki</SelectItem>
-                        <SelectItem value="amara">Amara Diallo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Assign Zone</Label>
-                    <Select>
-                      <SelectTrigger><SelectValue placeholder="Select a zone" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="zoneB">Zone B - Nairobi West</SelectItem>
-                        <SelectItem value="zoneD">Zone D - Lang'ata</SelectItem>
-                        <SelectItem value="zoneG">Zone G - Embakasi</SelectItem>
+                        {projectUsers.map((u: any) => (
+                          <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>
+                        ))}
+                        {projectUsers.length === 0 && <SelectItem value="none" disabled>No users in this project</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                  <Button onClick={() => setCreateOpen(false)}>Create Team</Button>
+                  <Button variant="outline" onClick={() => { setCreateOpen(false); setTeamName(''); setLeaderId('') }}>Cancel</Button>
+                  <Button onClick={handleCreateTeam} disabled={isCreating || !teamName.trim()}>
+                    {isCreating ? 'Creating...' : 'Create Team'}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

@@ -231,6 +231,25 @@ async function registerWithInvite(validated, inviteCode, inviteToken, req, res) 
 
     await consumeInvite(inviteData, connection);
 
+    // Auto-assign team leader if registered via team_leader invite
+    if (role === 'team_leader' && team && inviteData.invite.project_id) {
+      const [teamRows] = await connection.query(
+        'SELECT id FROM teams WHERE name = ? AND project_id = ? LIMIT 1',
+        [team, inviteData.invite.project_id]
+      );
+      if (teamRows.length > 0) {
+        const teamId = teamRows[0].id;
+        await connection.query(
+          'UPDATE teams SET leader_id = ? WHERE id = ?',
+          [id, teamId]
+        );
+        await connection.query(
+          'INSERT IGNORE INTO team_members (team_id, user_id) VALUES (?, ?)',
+          [teamId, id]
+        );
+      }
+    }
+
     await connection.commit();
     committed = true;
     connection.release();

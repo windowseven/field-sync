@@ -85,6 +85,11 @@ export const teamService = {
     return response?.data?.teams ?? response?.data?.data?.teams ?? [];
   },
 
+  async create(data: { project_id: string; name: string; leader_id?: string }): Promise<any> {
+    const response = await http.post<any>('/teams', data);
+    return response?.data?.team ?? response?.data?.data?.team;
+  },
+
   transformForFrontend(member: ApiTeamMember) {
     return {
       id: member.id,

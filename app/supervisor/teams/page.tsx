@@ -25,6 +25,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { teamService } from '@/lib/api/teamService'
 import { projectService, ApiProject } from '@/lib/api/projectService'
@@ -60,6 +61,11 @@ export default function SupervisorTeamsPage() {
   const [teams, setTeams] = React.useState<TeamData[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [isCreating, setIsCreating] = React.useState(false)
+  const [teamName, setTeamName] = React.useState('')
+  const [leaderId, setLeaderId] = React.useState('')
+  const [projectUsers, setProjectUsers] = React.useState<any[]>([])
+  const activeProjectIdRef = React.useRef<string | null>(null)
 
   const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6']
 
@@ -76,7 +82,13 @@ export default function SupervisorTeamsPage() {
           return
         }
 
-        const projectTeams = await teamService.getByProject(activeProject.id)
+        activeProjectIdRef.current = activeProject.id
+
+        const [projectTeams, users] = await Promise.all([
+          teamService.getByProject(activeProject.id),
+          projectService.getUsers(activeProject.id).catch(() => []),
+        ])
+        setProjectUsers(users)
         
         const transformed = projectTeams.map((team: any, index: number) => ({
           id: team.id,
@@ -107,6 +119,54 @@ export default function SupervisorTeamsPage() {
 
     fetchTeams()
   }, [])
+
+  const handleCreateTeam = async () => {
+    if (!teamName.trim()) {
+      toast({ title: 'Team name is required', variant: 'destructive' })
+      return
+    }
+    const projectId = activeProjectIdRef.current
+    if (!projectId) {
+      toast({ title: 'No active project found', variant: 'destructive' })
+      return
+    }
+    setIsCreating(true)
+    try {
+      await teamService.create({
+        project_id: projectId,
+        name: teamName.trim(),
+        leader_id: leaderId || undefined,
+      })
+      toast({ title: 'Team created successfully' })
+      setCreateOpen(false)
+      setTeamName('')
+      setLeaderId('')
+      // Refresh teams list
+      const projectTeams = await teamService.getByProject(projectId)
+      const transformed = projectTeams.map((team: any, index: number) => ({
+        id: team.id,
+        name: team.name,
+        color: chartColors[index % chartColors.length],
+        zone: team.zone?.name || 'Unassigned',
+        status: team.status === 'active' ? 'active' : team.status === 'paused' ? 'paused' : 'idle',
+        progress: Math.round((team.tasks_completed || 0) / ((team.tasks_completed || 0) + (team.tasks_pending || 1)) * 100),
+        leader: { name: team.leader?.name || 'Unassigned', email: team.leader?.email || '' },
+        members: (team.members || []).map((m: any) => ({
+          name: m.name,
+          status: m.status === 'active' ? 'active' : m.status === 'offline' ? 'offline' : 'idle',
+          submissions: m.submissions || 0,
+        })),
+        tasksCompleted: team.tasks_completed || 0,
+        tasksPending: team.tasks_pending || 0,
+      }))
+      setTeams(transformed as TeamData[])
+    } catch (err) {
+      console.error('Failed to create team:', err)
+      toast({ title: 'Failed to create team', variant: 'destructive' })
+    } finally {
+      setIsCreating(false)
+    }
+  }
 
   const filtered = teams.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -162,7 +222,7 @@ export default function SupervisorTeamsPage() {
               <h1 className="text-2xl font-bold tracking-tight">Teams</h1>
               <p className="text-muted-foreground">Manage field teams, assign leaders, and track performance</p>
             </div>
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) { setTeamName(''); setLeaderId('') } }}>
               <DialogTrigger asChild>
                 <Button><Plus className="h-4 w-4 mr-2" /> Create Team</Button>
               </DialogTrigger>
@@ -174,36 +234,30 @@ export default function SupervisorTeamsPage() {
                 <div className="space-y-4 py-2">
                   <div className="space-y-2">
                     <Label>Team Name</Label>
-                    <Input placeholder="e.g. Team Foxtrot" />
+                    <Input
+                      placeholder="e.g. Team Foxtrot"
+                      value={teamName}
+                      onChange={e => setTeamName(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Assign Team Leader</Label>
-                    <Select>
-                      <SelectTrigger><SelectValue placeholder="Select a team leader" /></SelectTrigger>
+                    <Select value={leaderId} onValueChange={setLeaderId}>
+                      <SelectTrigger><SelectValue placeholder="Select a team leader (optional)" /></SelectTrigger>
                       <SelectContent>
-                        {[...new Set(teams.map(t => t.leader.name).filter(Boolean))].map(name => (
-                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        {projectUsers.map((u: any) => (
+                          <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>
                         ))}
-                        {teams.length === 0 && <SelectItem value="none" disabled>No leaders available</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Assign Zone</Label>
-                    <Select>
-                      <SelectTrigger><SelectValue placeholder="Select a zone" /></SelectTrigger>
-                      <SelectContent>
-                        {[...new Set(teams.map(t => t.zone).filter(Boolean))].map(zone => (
-                          <SelectItem key={zone} value={zone}>{zone}</SelectItem>
-                        ))}
-                        {teams.length === 0 && <SelectItem value="none" disabled>No zones available</SelectItem>}
+                        {projectUsers.length === 0 && <SelectItem value="none" disabled>No users in this project</SelectItem>}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                  <Button onClick={() => setCreateOpen(false)}>Create Team</Button>
+                  <Button variant="outline" onClick={() => { setCreateOpen(false); setTeamName(''); setLeaderId('') }}>Cancel</Button>
+                  <Button onClick={handleCreateTeam} disabled={isCreating || !teamName.trim()}>
+                    {isCreating ? 'Creating...' : 'Create Team'}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
