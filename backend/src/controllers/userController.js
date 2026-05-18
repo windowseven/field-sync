@@ -127,9 +127,14 @@ export const updateUser = asyncHandler(async (req, res) => {
     status: req.body.status ?? existing.status,
   };
 
+  // Prevent changing admin roles or assigning admin role
+  if (existing.role === 'admin' || updates.role === 'admin') {
+    throw new AppError('Admin roles cannot be modified or assigned', 403);
+  }
+
   // Validate role if changed
-  const validRoles = ['admin', 'supervisor', 'team_leader', 'field_agent'];
-  if (!validRoles.includes(updates.role)) {
+  const validRoles = ['supervisor', 'team_leader', 'field_agent'];
+  if (updates.role !== existing.role && !validRoles.includes(updates.role)) {
     throw new AppError(`Invalid role. Must be one of: ${validRoles.join(', ')}`, 400);
   }
 
