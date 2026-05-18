@@ -56,7 +56,7 @@ const getFrontendUrl = () => {
   }
 
   return process.env.NODE_ENV === 'production'
-    ? 'https://field-sync.onrender.com'
+    ? 'https://fieldsync-web.onrender.com'
     : 'http://localhost:3000';
 };
 
