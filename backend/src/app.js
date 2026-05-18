@@ -14,7 +14,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-import * as Sentry from '@sentry/node';
 import logger from './utils/logger.js';
 import { requestId } from './utils/requestId.js';
 import { recordApiRequest } from './utils/requestMetrics.js';
@@ -23,6 +22,15 @@ import { getSecurityPolicies } from './utils/securityPolicyStore.js';
 import mainRouter from './routes/index.js';
 import { checkConnection } from './config/database.js';
 import { csrfProtection, csrfTokenEndpoint } from './middlewares/csrf.js';
+
+let Sentry;
+if (process.env.SENTRY_DSN) {
+  try {
+    Sentry = await import('@sentry/node');
+  } catch (err) {
+    logger.warn('Sentry unavailable, skipping error tracking:', err.message);
+  }
+}
 
 // ─── Validate required environment variables ────────────────
 const REQUIRED_ENV = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DB_PASSWORD'];
@@ -277,10 +285,12 @@ app.use('/api/v1', mainRouter);
 
 // ─── Debug Sentry endpoint (for verification) ────────────────
 app.get('/debug-sentry', (req, res) => {
-  Sentry.logger.info('User triggered test error', {
-    action: 'test_error_endpoint',
-  });
-  Sentry.metrics.count('test_counter', 1);
+  if (Sentry) {
+    Sentry.logger.info('User triggered test error', {
+      action: 'test_error_endpoint',
+    });
+    Sentry.metrics.count('test_counter', 1);
+  }
   throw new Error('My first Sentry error!');
 });
 
@@ -298,7 +308,7 @@ app.all('*', (req, res, next) => {
 });
 
 // ─── Sentry error handler (must be before generic handler) ─
-if (process.env.SENTRY_DSN) {
+if (Sentry) {
   Sentry.setupExpressErrorHandler(app);
 }
 

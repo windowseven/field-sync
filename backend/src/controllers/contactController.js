@@ -35,8 +35,7 @@ export const submitContactInquiry = asyncHandler(async (req, res) => {
       status: 'success',
       message: 'Your message has been sent successfully. We will respond within 24 hours.',
     });
-};
-
+});
 export const getContactInquiries = asyncHandler(async (req, res) => {
     const { status, subject } = req.query;
     let query = 'SELECT * FROM contact_inquiries WHERE 1=1';
@@ -55,7 +54,7 @@ export const getContactInquiries = asyncHandler(async (req, res) => {
 
     const [rows] = await pool.query(query, params);
     res.json({ status: 'success', data: { inquiries: rows } });
-};
+});
 
 export const updateInquiryStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -71,4 +70,4 @@ export const updateInquiryStatus = asyncHandler(async (req, res) => {
     );
 
     res.json({ status: 'success', message: 'Inquiry status updated' });
-};
+});

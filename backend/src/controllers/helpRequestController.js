@@ -25,10 +25,7 @@ export const createHelpRequest = asyncHandler(async (req, res) => {
       type,
       message,
     });
-
-    const [rows] = await pool.query('SELECT * FROM help_requests WHERE id = ?', [id]);
-    res.status(201).json({ status: 'success', data: { helpRequest: rows[0] } });
-};
+});
 
 export const getMyHelpRequests = asyncHandler(async (req, res) => {
     const userId = req.user.id;
@@ -37,7 +34,7 @@ export const getMyHelpRequests = asyncHandler(async (req, res) => {
       [userId]
     );
     res.json({ status: 'success', data: { helpRequests: rows } });
-};
+});
 
 export const getPendingHelpRequests = asyncHandler(async (req, res) => {
     const [rows] = await pool.query(
@@ -49,7 +46,7 @@ export const getPendingHelpRequests = asyncHandler(async (req, res) => {
        LIMIT 200`
     );
     res.json({ status: 'success', data: { helpRequests: rows } });
-};
+});
 
 export const respondToHelpRequest = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -93,4 +90,4 @@ export const respondToHelpRequest = asyncHandler(async (req, res) => {
     });
 
     res.json({ status: 'success', data: { helpRequest: rows[0] } });
-};
+});

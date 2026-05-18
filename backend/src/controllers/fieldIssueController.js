@@ -61,7 +61,7 @@ export const createFieldIssue = asyncHandler(async (req, res) => {
     );
 
     res.status(201).json({ status: 'success', data: { issue: rows[0] } });
-};
+});
 
 export const getTeamFieldIssues = asyncHandler(async (req, res) => {
     const [teamRows] = await pool.query('SELECT id FROM teams WHERE leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)', [req.user.id, req.user.id]);
@@ -79,7 +79,7 @@ export const getTeamFieldIssues = asyncHandler(async (req, res) => {
     const [rows] = statusFilter === 'all' ? await pool.query(query, [team.id]) : await pool.query(query, [team.id, statusFilter]);
 
     res.json({ status: 'success', data: { issues: rows } });
-};
+});
 
 export const respondToFieldIssue = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -135,7 +135,7 @@ export const respondToFieldIssue = asyncHandler(async (req, res) => {
     );
 
     res.json({ status: 'success', data: { issue: updatedRows[0] } });
-};
+});
 
 export const getActiveIssues = asyncHandler(async (req, res) => {
     const [teamRows] = await pool.query('SELECT id FROM teams WHERE leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)', [req.user.id, req.user.id]);
@@ -155,4 +155,4 @@ export const getActiveIssues = asyncHandler(async (req, res) => {
     );
 
     res.json({ status: 'success', data: { activeIssues: rows } });
-};
+});

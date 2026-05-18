@@ -117,8 +117,7 @@ export const getAdminDashboardStats = asyncHandler(async (req, res) => {
         recentActivity: parseInt(recentActivityCount) || 0
       }
     });
-};
-
+});
 export const getSystemHealth = asyncHandler(async (req, res) => {
     res.json({
       status: 'success',
@@ -130,4 +129,4 @@ export const getSystemHealth = asyncHandler(async (req, res) => {
         timestamp: new Date().toISOString()
       }
     });
-};
+});

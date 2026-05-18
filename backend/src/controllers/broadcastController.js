@@ -1,4 +1,4 @@
-import { AppError } from '../utils/appError.js';
+import { AppError } from '../utils/AppError.js';
 
 export const getBroadcastSnapshot = async (req, res) => {
   throw new AppError('Broadcasts not implemented', 501);

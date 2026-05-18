@@ -77,4 +77,4 @@ function validatePasswordWithPolicy(password) {
   if (passwordPolicy.requireNumbers && !/[0-9]/.test(password)) {
     throw createPasswordValidationError('Password must contain numbers');
   }
-
+}

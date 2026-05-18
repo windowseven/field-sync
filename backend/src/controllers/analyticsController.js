@@ -235,7 +235,7 @@ export const getAdminAnalytics = asyncHandler(async (req, res) => {
         teamPerformance,
       }
     });
-};
+});
 
 export const getProjectAnalytics = asyncHandler(async (req, res) => {
     const { projectId } = req.params;
@@ -291,7 +291,7 @@ export const getProjectAnalytics = asyncHandler(async (req, res) => {
         teamMetrics
       }
     });
-};
+});
 
 export const getTeamLeaderStats = asyncHandler(async (req, res) => {
     const userId = req.user.id;
@@ -341,5 +341,5 @@ export const getTeamLeaderStats = asyncHandler(async (req, res) => {
         formsSummary
       }
     });
-};
+});
 

@@ -19,7 +19,7 @@ export const getAuditLogs = asyncHandler(async (req, res) => {
       [limit]
     );
     res.json({ status: 'success', data: { auditLogs: rows } });
-};
+});
 
 function inferCategory(action = '') {
   if (action.startsWith('auth.') || action.startsWith('user.login')) return 'auth';
