@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { useRouter, useParams } from 'next/navigation'
 import { Bell, Search, Command, Plus } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -35,6 +36,12 @@ export function DashboardHeader({
   breadcrumbs = [],
   rootCrumb = { label: 'Dashboard', href: '/dashboard' },
 }: DashboardHeaderProps) {
+  const router = useRouter()
+  const params = useParams()
+  const projectId = params?.projectId as string | undefined
+  const basePath = projectId
+    ? `/supervisor/projects/${projectId}`
+    : null
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
 
   React.useEffect(() => {
@@ -107,10 +114,18 @@ export function DashboardHeader({
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>Create New</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>New Team</DropdownMenuItem>
-            <DropdownMenuItem>New Zone</DropdownMenuItem>
-            <DropdownMenuItem>New Form</DropdownMenuItem>
-            <DropdownMenuItem>Assign Task</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push(basePath ? `${basePath}/teams` : '/supervisor/teams')}>
+              New Team
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push(basePath ? `${basePath}/zones` : '/supervisor/zones')}>
+              New Zone
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/supervisor/forms')}>
+              New Form
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push(basePath ? `${basePath}/tasks` : '/supervisor/tasks')}>
+              Assign Task
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
