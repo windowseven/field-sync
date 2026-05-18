@@ -5,6 +5,7 @@ import { sendInviteEmail } from '../services/emailService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { validateInviteWithResponse } from '../services/inviteService.js';
+import { getFrontendUrl } from '../utils/frontendUrl.js';
 
 const generateId = () => crypto.randomUUID();
 
@@ -100,8 +101,7 @@ export const sendEmailInvite = asyncHandler(async (req, res) => {
       [id, email, role, project_id || null, team || team_id, token, expiresAt, createdBy]
     );
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const inviteUrl = `${frontendUrl}/join/${token}`;
+    const inviteUrl = `${getFrontendUrl()}/join/${token}`;
 
     try {
       await sendInviteEmail(email, inviteUrl, role, team || team_id);
@@ -165,8 +165,7 @@ export const resendEmailInvite = asyncHandler(async (req, res) => {
     }
 
     const invite = rows[0];
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const inviteUrl = `${frontendUrl}/join/${invite.token}`;
+    const inviteUrl = `${getFrontendUrl()}/join/${invite.token}`;
 
     await pool.query(
       'UPDATE email_invites SET token = ?, expires_at = ?, status = "pending", sent_at = NOW() WHERE id = ?',
@@ -174,7 +173,7 @@ export const resendEmailInvite = asyncHandler(async (req, res) => {
     );
 
     const [updated] = await pool.query('SELECT * FROM email_invites WHERE id = ?', [id]);
-    const newInviteUrl = `${frontendUrl}/join/${updated[0].token}`;
+    const newInviteUrl = `${getFrontendUrl()}/join/${updated[0].token}`;
 
     try {
       await sendInviteEmail(invite.email, newInviteUrl, invite.role, invite.team);

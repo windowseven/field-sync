@@ -1,4 +1,5 @@
 import logger from '../utils/logger.js';
+import { getFrontendUrl } from '../utils/frontendUrl.js';
 
 export class EmailDeliveryError extends Error {
   constructor(message, cause) {
@@ -283,8 +284,7 @@ export const sendOtpEmail = async (email, otp, userName) => {
 };
 
 export const sendResetEmail = async (email, token, userName) => {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const { subject, html } = resetTemplate(userName, frontendUrl, token);
+  const { subject, html } = resetTemplate(userName, getFrontendUrl(), token);
   try {
     await sendEmail({ to: email, subject, html });
     logger.info(`Reset email sent to ${email}`);
