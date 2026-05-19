@@ -14,10 +14,13 @@ import { DashboardHeader } from '@/components/shared/layout/dashboard-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
 interface PlatformUser {
@@ -64,6 +67,9 @@ function UsersPageContent() {
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeTab, setActiveTab] = useState<(typeof validTabs)[number]>(() => normalizeTab(searchParams.get('tab')))
+  const [roleChangeUser, setRoleChangeUser] = useState<PlatformUser | null>(null)
+  const [newRole, setNewRole] = useState('')
+  const [isChangingRole, setIsChangingRole] = useState(false)
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -89,6 +95,22 @@ function UsersPageContent() {
       setAllUsers(prev => prev.filter(u => u.id !== id));
     } else {
       alert('Failed to delete user');
+    }
+  }
+
+  const handleRoleChange = async () => {
+    if (!roleChangeUser || !newRole) return
+    setIsChangingRole(true)
+    try {
+      await http.patch(`/users/${roleChangeUser.id}`, { role: newRole })
+      toast({ title: `Role changed to ${newRole.replace('_', ' ')}` })
+      setAllUsers(prev => prev.map(u => u.id === roleChangeUser.id ? { ...u, role: newRole } : u))
+      setRoleChangeUser(null)
+      setNewRole('')
+    } catch {
+      toast({ title: 'Failed to change role', variant: 'destructive' })
+    } finally {
+      setIsChangingRole(false)
     }
   }
 
@@ -191,6 +213,11 @@ function UsersPageContent() {
                     <DropdownMenuItem><Key className="mr-2 h-4 w-4" /> Reset Password</DropdownMenuItem>
                     <DropdownMenuItem><LogOut className="mr-2 h-4 w-4" /> Force Logout</DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    {user.role !== 'admin' && (
+                      <DropdownMenuItem onClick={() => { setRoleChangeUser(user); setNewRole('') }}>
+                        <UserCog className="mr-2 h-4 w-4" /> Change Role
+                      </DropdownMenuItem>
+                    )}
                     {user.status === 'active' ? (
                       <DropdownMenuItem className="text-destructive focus:text-destructive">
                         <Ban className="mr-2 h-4 w-4" /> Suspend Account
@@ -325,6 +352,32 @@ function UsersPageContent() {
 
         </div>
       </main>
+
+      <Dialog open={!!roleChangeUser} onOpenChange={(open) => { if (!open) { setRoleChangeUser(null); setNewRole('') } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Role</DialogTitle>
+            <DialogDescription>Update role for {roleChangeUser?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>New Role</Label>
+            <Select value={newRole} onValueChange={setNewRole}>
+              <SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="supervisor">Supervisor</SelectItem>
+                <SelectItem value="team_leader">Team Leader</SelectItem>
+                <SelectItem value="field_agent">Field Worker</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRoleChangeUser(null); setNewRole('') }}>Cancel</Button>
+            <Button onClick={handleRoleChange} disabled={isChangingRole || !newRole}>
+              {isChangingRole ? 'Changing...' : 'Change Role'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
