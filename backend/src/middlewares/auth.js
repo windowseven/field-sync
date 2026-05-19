@@ -3,7 +3,7 @@ import logger from '../utils/logger.js';
 import { getPlatformControls } from '../utils/platformConfigStore.js';
 import { isBlacklisted } from '../utils/tokenBlacklist.js';
 
-export const authenticateToken = (req, res, next) => {
+export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -20,7 +20,7 @@ export const authenticateToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    if (decoded.jti && isBlacklisted(decoded.jti)) {
+    if (decoded.jti && await isBlacklisted(decoded.jti)) {
       return res.status(401).json({
         status: 'error',
         message: 'Token has been revoked. Please log in again.'
@@ -77,7 +77,10 @@ export const enforcePlatformControls = async (req, res, next) => {
 
     next();
   } catch (error) {
-    logger.warn('Platform controls check failed — allowing request in degraded mode:', error.message);
-    next();
+    logger.error('Platform controls check failed — denying request:', error.message);
+    return res.status(503).json({
+      status: 'error',
+      message: 'Service temporarily unavailable. Please try again later.',
+    });
   }
 };

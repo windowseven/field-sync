@@ -119,12 +119,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
   }
 
   if (json?.data && typeof json.data === "object") {
-    // Merge top-level fields (e.g. emailDeliveryFailed) with data fields
-    const { data, status, ...topLevel } = json;
     return {
-      ...data,
-      ...topLevel,
-      message: json.message ?? data.message,
+      ...json.data,
+      message: json.message ?? json.data.message,
+      emailDeliveryFailed: json.emailDeliveryFailed,
     } as T;
   }
 

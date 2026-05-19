@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import pool from '../config/database.js';
 import logger from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
@@ -6,6 +7,25 @@ import { logAudit } from './auditLogController.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { paginate } from '../services/paginationService.js';
+
+const createUserSchema = z.object({
+  name: z.string().min(2).max(100),
+  first_name: z.string().min(1).max(50).optional(),
+  email: z.string().email(),
+  password: z.string().min(6).max(128),
+  role: z.enum(['supervisor', 'team_leader', 'field_agent']),
+  phone: z.string().max(30).optional(),
+});
+
+const updateUserSchema = z.object({
+  name: z.string().min(2).max(100).optional(),
+  first_name: z.string().min(1).max(50).optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(6).max(128).optional(),
+  role: z.enum(['supervisor', 'team_leader', 'field_agent']).optional(),
+  phone: z.string().max(30).optional(),
+  status: z.enum(['online', 'offline', 'idle']).optional(),
+});
 
 export const getAllUsers = asyncHandler(async (req, res) => {
   const { page, limit, offset } = paginate(req.query.page, req.query.limit, 200);
@@ -72,40 +92,49 @@ export const getUserById = asyncHandler(async (req, res) => {
 
 // ─── Create User (Admin only) ───────────────────────────────
 export const createUser = asyncHandler(async (req, res) => {
-  const { name, first_name, email, password, role, phone } = req.body;
+  const validated = createUserSchema.parse(req.body);
 
-  if (!name || !email || !password || !role) {
-    throw new AppError('name, email, password, and role are required', 400);
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [existing] = await connection.query(
+      'SELECT id FROM users WHERE email = ? FOR UPDATE',
+      [validated.email]
+    );
+    if (existing.length > 0) {
+      await connection.rollback(); connection.release();
+      throw new AppError('Email already registered', 409);
+    }
+
+    const id = crypto.randomUUID();
+    const passwordHash = await bcrypt.hash(validated.password, 12);
+
+    await connection.query(
+      'INSERT INTO users (id, name, first_name, email, password_hash, role, phone, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, validated.name, validated.first_name || null, validated.email, passwordHash, validated.role, validated.phone || null, 'offline']
+    );
+
+    await connection.commit();
+    connection.release();
+
+    await logAudit(req.user.id, 'user.create', { target_user_id: id, email: validated.email, role: validated.role });
+
+    const [rows] = await pool.query(
+      'SELECT id, name, first_name, email, role, status, avatar, phone FROM users WHERE id = ?',
+      [id]
+    );
+
+    logger.info(`User created by admin: ${validated.email} (${validated.role})`);
+    res.status(201).json({ status: 'success', data: { user: rows[0] } });
+  } catch (err) {
+    if (connection) {
+      try { await connection.rollback(); } catch {}
+      connection.release();
+    }
+    throw err;
   }
-
-  const validRoles = ['admin', 'supervisor', 'team_leader', 'field_agent'];
-  if (!validRoles.includes(role)) {
-    throw new AppError(`Invalid role. Must be one of: ${validRoles.join(', ')}`, 400);
-  }
-
-  // Check if email already exists
-  const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
-  if (existing.length > 0) {
-    throw new AppError('Email already registered', 409);
-  }
-
-  const id = crypto.randomUUID();
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  await pool.query(
-    'INSERT INTO users (id, name, first_name, email, password_hash, role, phone, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, name, first_name || null, email, passwordHash, role, phone || null, 'offline']
-  );
-
-  await logAudit(req.user.id, 'user.create', { target_user_id: id, email, role });
-
-  const [rows] = await pool.query(
-    'SELECT id, name, first_name, email, role, status, avatar, phone FROM users WHERE id = ?',
-    [id]
-  );
-
-  logger.info(`User created by admin: ${email} (${role})`);
-  res.status(201).json({ status: 'success', data: { user: rows[0] } });
 });
 
 // ─── Update User (Admin only) ───────────────────────────────
@@ -118,24 +147,28 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw new AppError('User not found', 404);
   }
 
-  const updates = {
-    name: req.body.name ?? existing.name,
-    first_name: req.body.first_name ?? existing.first_name,
-    email: req.body.email ?? existing.email,
-    role: req.body.role ?? existing.role,
-    phone: req.body.phone ?? existing.phone,
-    status: req.body.status ?? existing.status,
-  };
-
-  // Prevent changing admin roles or assigning admin role
-  if (existing.role === 'admin' || updates.role === 'admin') {
-    throw new AppError('Admin roles cannot be modified or assigned', 403);
+  // Prevent modifying admin users
+  if (existing.role === 'admin') {
+    throw new AppError('Admin roles cannot be modified', 403);
   }
 
-  // Validate role if changed
-  const validRoles = ['supervisor', 'team_leader', 'field_agent'];
-  if (updates.role !== existing.role && !validRoles.includes(updates.role)) {
-    throw new AppError(`Invalid role. Must be one of: ${validRoles.join(', ')}`, 400);
+  // Validate body with Zod (partial — only provided fields are validated)
+  const body = Object.keys(req.body).length > 0
+    ? updateUserSchema.parse(req.body)
+    : {};
+
+  const updates = {
+    name: body.name ?? existing.name,
+    first_name: body.first_name ?? existing.first_name,
+    email: body.email ?? existing.email,
+    role: body.role ?? existing.role,
+    phone: body.phone ?? existing.phone,
+    status: body.status ?? existing.status,
+  };
+
+  // Prevent assigning admin role
+  if (updates.role === 'admin') {
+    throw new AppError('Admin roles cannot be assigned', 403);
   }
 
   // Check email uniqueness if changed
@@ -150,8 +183,8 @@ export const updateUser = asyncHandler(async (req, res) => {
   let passwordClause = '';
   const queryParams = [updates.name, updates.first_name, updates.email, updates.role, updates.phone, updates.status];
 
-  if (req.body.password) {
-    const passwordHash = await bcrypt.hash(req.body.password, 12);
+  if (body.password) {
+    const passwordHash = await bcrypt.hash(body.password, 12);
     passwordClause = ', password_hash = ?';
     queryParams.push(passwordHash);
   }

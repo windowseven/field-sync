@@ -27,7 +27,7 @@ import type {
   Permission,
 } from "@/types/auth.types";
 import { ROLE_DASHBOARDS, STORAGE_KEYS } from "@/types/auth.types";
-import { tokenManager, activityTracker } from "./tokenManager";
+import { tokenManager, activityTracker, crossTabSignal } from "./tokenManager";
 import { sessionManager } from "./sessionManager";
 import { hasPermission, hasAnyPermission, hasAllPermissions } from "./permissions";
 import { fieldSyncSocket } from "./socketManager";
@@ -270,6 +270,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     [router]
   );
+
+  // ─── Cross-tab logout listener (fires before hydration completes) ─
+  useEffect(() => {
+    const unlisten = crossTabSignal.onLogoutSignal(() => {
+      devLog("[Auth] Cross-tab logout signal received");
+      tokenManager.clearAll();
+      dispatch({ type: "AUTH_LOGOUT" });
+    });
+    return unlisten;
+  }, []);
 
   // ─── Hydrate from storage on mount ───────────────────────────
   useEffect(() => {

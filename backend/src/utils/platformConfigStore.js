@@ -221,7 +221,7 @@ export async function getAppSettings({ forceRefresh = false } = {}) {
   }
 
   settingsCache = next;
-  settingsCacheExpiresAt = Date.now() + 5000;
+  settingsCacheExpiresAt = Date.now() + 30000;
 
   return { ...next };
 }
@@ -256,7 +256,7 @@ export async function setAppSetting(property, value, updatedBy = null) {
   const current = await getAppSettings({ forceRefresh: true });
   const next = { ...current, [property]: value };
   settingsCache = next;
-  settingsCacheExpiresAt = Date.now() + 5000;
+  settingsCacheExpiresAt = Date.now() + 30000;
   return next;
 }
 

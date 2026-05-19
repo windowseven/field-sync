@@ -315,21 +315,17 @@ if (Sentry) {
 // ─── Global Error Handler ───────────────────────────────────
 app.use((err, req, res, next) => {
   const reqId = req?.id || '-';
-  let statusCode = err.statusCode || 500;
-  let message = err.message || 'Internal Server Error';
-  let code = err.code;
-
-  // Handle Zod validation errors from asyncHandler
-  if (err.name === 'ZodError') {
-    statusCode = 400;
-    message = err.issues.map(i => i.message).join('; ');
-  }
+  const statusCode = err.statusCode || (err.name === 'ZodError' ? 400 : 500);
+  const message = err.name === 'ZodError'
+    ? err.issues.map(i => i.message).join('; ')
+    : (err.message || 'Internal Server Error');
+  const code = err.code;
 
   const level = statusCode >= 500 ? 'error' : 'warn';
   logger[level](`[${reqId}] ${err.name}: ${err.message}`);
   if (err.stack && statusCode >= 500) logger.debug(err.stack);
   res.status(statusCode).json({
-    status: statusCode >= 500 ? 'error' : 'fail',
+    status: 'error',
     ...(code ? { code } : {}),
     message: statusCode >= 500 && process.env.NODE_ENV === 'production'
       ? 'Internal Server Error'

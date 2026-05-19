@@ -17,6 +17,10 @@ import {
 } from '../utils/authHelpers.js';
 import { validateAndLockInviteLink, validateAndLockEmailInvite, consumeInvite } from '../services/inviteService.js';
 
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token is required'),
+});
+
 const registerSchema = z.object({
   name: z.string().min(2).max(100),
   first_name: z.string().min(1).max(50),
@@ -35,7 +39,7 @@ export const login = asyncHandler(async (req, res) => {
 
   if (!user) {
     await logAudit(null, 'login.failed', {
-      email, ip: req.ip, user_agent: req.get('User-Agent'), reason: 'user_not_found',
+      email, ip: req.ip, user_agent: req.get('User-Agent'), reason: 'invalid_credentials',
     });
     throw new AppError('Invalid email or password', 401);
   }
@@ -43,7 +47,7 @@ export const login = asyncHandler(async (req, res) => {
   const isMatch = await bcrypt.compare(password, user.password_hash);
   if (!isMatch) {
     await logAudit(null, 'login.failed', {
-      email, user_id: user.id, ip: req.ip, user_agent: req.get('User-Agent'), reason: 'wrong_password',
+      email, user_id: user.id, ip: req.ip, user_agent: req.get('User-Agent'), reason: 'invalid_credentials',
     });
     throw new AppError('Invalid email or password', 401);
   }
@@ -83,9 +87,7 @@ export const getProfile = asyncHandler(async (req, res) => {
 });
 
 export const refresh = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.body;
-
-  if (!refreshToken) throw new AppError('Refresh token is required', 400);
+  const { refreshToken } = refreshSchema.parse(req.body);
 
   const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
@@ -94,7 +96,7 @@ export const refresh = asyncHandler(async (req, res) => {
   if (decoded.jti) {
     const { session } = getSecurityPolicies();
     const ttlMs = session.refreshTokenExpiryDays * 24 * 60 * 60 * 1000;
-    addToBlacklist(decoded.jti, ttlMs);
+    await addToBlacklist(decoded.jti, ttlMs);
   }
 
   const [rows] = await pool.query('SELECT id, name, email, role FROM users WHERE id = ?', [decoded.userId]);
@@ -126,50 +128,67 @@ export const register = asyncHandler(async (req, res) => {
     return await registerWithInvite(validated, inviteCode, inviteToken, req, res);
   }
 
-  const [existing] = await pool.query(
-    'SELECT id, name, first_name, email, role, verification_code FROM users WHERE email = ?',
-    [validated.email]
-  );
-  if (existing.length > 0) {
-    if (isPendingEmailVerification(existing[0])) {
-      const payload = await resendPendingRegistrationOtp(existing[0]);
-      return res.status(200).json(payload);
-    }
-    throw new AppError('Email already registered. Please sign in instead.', 409, 'EMAIL_ALREADY_REGISTERED');
-  }
-
-  const id = crypto.randomUUID();
-  const passwordHash = await bcrypt.hash(validated.password, 12);
-  const role = validated.role ?? 'field_agent';
-
-  await pool.query(
-    'INSERT INTO users (id, name, first_name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?, "offline")',
-    [id, validated.name, validated.first_name, validated.email, passwordHash, role]
-  );
-
-  let emailFailed = false;
+  let connection;
   try {
-    await generateAndSendOtp(validated.email, validated.first_name || validated.name);
-  } catch (emailErr) {
-    if (emailErr instanceof EmailDeliveryError) {
-      emailFailed = true;
-      logger.warn(`OTP email failed for new user ${validated.email} (account created): ${emailErr.message}`);
-    } else {
-      throw emailErr;
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [existing] = await connection.query(
+      'SELECT id, name, first_name, email, role, verification_code FROM users WHERE email = ? FOR UPDATE',
+      [validated.email]
+    );
+    if (existing.length > 0) {
+      if (isPendingEmailVerification(existing[0])) {
+        await connection.rollback(); connection.release();
+        const payload = await resendPendingRegistrationOtp(existing[0]);
+        return res.status(200).json(payload);
+      }
+      await connection.rollback(); connection.release();
+      throw new AppError('Email already registered. Please sign in instead.', 409, 'EMAIL_ALREADY_REGISTERED');
     }
+
+    const id = crypto.randomUUID();
+    const passwordHash = await bcrypt.hash(validated.password, 12);
+    const role = validated.role ?? 'field_agent';
+
+    await connection.query(
+      'INSERT INTO users (id, name, first_name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?, "offline")',
+      [id, validated.name, validated.first_name, validated.email, passwordHash, role]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    let emailFailed = false;
+    try {
+      await generateAndSendOtp(validated.email, validated.first_name || validated.name);
+    } catch (emailErr) {
+      if (emailErr instanceof EmailDeliveryError) {
+        emailFailed = true;
+        logger.warn(`OTP email failed for new user ${validated.email} (account created): ${emailErr.message}`);
+      } else {
+        throw emailErr;
+      }
+    }
+
+    await logAudit(null, 'user.register', { user_id: id, email: validated.email, role });
+
+    logger.info(`New user registered: ${validated.email}`);
+    res.status(201).json({
+      status: 'success',
+      message: emailFailed
+        ? 'Account created, but we could not send the verification email. Please use Resend Code on the next page.'
+        : 'Account created. Check your email for the verification code.',
+      emailDeliveryFailed: emailFailed,
+      data: { id, email: validated.email, role },
+    });
+  } catch (err) {
+    if (connection) {
+      try { await connection.rollback(); } catch {}
+      connection.release();
+    }
+    throw err;
   }
-
-  await logAudit(null, 'user.register', { user_id: id, email: validated.email, role });
-
-  logger.info(`New user registered: ${validated.email}`);
-  res.status(201).json({
-    status: 'success',
-    message: emailFailed
-      ? 'Account created, but we could not send the verification email. Please use Resend Code on the next page.'
-      : 'Account created. Check your email for the verification code.',
-    emailDeliveryFailed: emailFailed,
-    data: { id, email: validated.email, role },
-  });
 });
 
 async function registerWithInvite(validated, inviteCode, inviteToken, req, res) {
@@ -295,7 +314,7 @@ export const logout = asyncHandler(async (req, res) => {
       if (decoded?.jti) {
         const { session } = getSecurityPolicies();
         const ttlMs = session.accessTokenExpiryHours * 60 * 60 * 1000;
-        addToBlacklist(decoded.jti, ttlMs);
+        await addToBlacklist(decoded.jti, ttlMs);
       }
     } catch {
       // Token decode failed, ignore

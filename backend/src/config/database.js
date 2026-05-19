@@ -112,9 +112,10 @@ export const checkConnection = async () => {
     const connection = await pool.getConnection();
     logger.info('✅ Successfully connected to MySQL database.');
     connection.release();
+    return true;
   } catch (error) {
     logger.error('❌ Database connection failed:', error.message);
-    process.exit(1);
+    return false;
   }
 };
 

@@ -1,60 +1,18 @@
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
 
-const CSRF_SECRET = process.env.CSRF_SECRET || crypto.randomBytes(32).toString('hex');
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
-// In-memory CSRF token store (per-session)
-// In production, use Redis or DB-backed sessions
-const csrfTokens = new Map();
-
-// Clean expired tokens every 30 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, data] of csrfTokens) {
-    if (now > data.expiresAt) {
-      csrfTokens.delete(token);
-    }
-  }
-}, 30 * 60 * 1000);
-
-/**
- * Generate a CSRF token
- */
 function generateCsrfToken() {
-  const token = crypto.randomBytes(32).toString('hex');
-  csrfTokens.set(token, {
-    expiresAt: Date.now() + TOKEN_EXPIRY_MS,
-  });
-  return token;
+  return crypto.randomBytes(32).toString('hex');
 }
 
-/**
- * Validate a CSRF token
- */
-function validateCsrfToken(token) {
-  if (!token) return false;
-  const data = csrfTokens.get(token);
-  if (!data) return false;
-  if (Date.now() > data.expiresAt) {
-    csrfTokens.delete(token);
-    return false;
-  }
-  return true;
-}
-
-/**
- * CSRF Token Endpoint — GET /api/v1/auth/csrf
- * Returns a fresh CSRF token for the client to use
- */
 export const csrfTokenEndpoint = (req, res) => {
   const token = generateCsrfToken();
 
-  // HttpOnly cookie prevents third-party scripts from reading the token.
-  // The SPA reads the token from the JSON response body instead.
   const isHttps = req.protocol === 'https';
   res.cookie('XSRF-TOKEN', token, {
-    httpOnly: true,
+    httpOnly: false,
     secure: isHttps,
     sameSite: 'Strict',
     maxAge: TOKEN_EXPIRY_MS,
@@ -67,11 +25,6 @@ export const csrfTokenEndpoint = (req, res) => {
   });
 };
 
-/**
- * CSRF Protection Middleware
- * Validates X-CSRF-Token header on state-changing requests
- * Safe methods (GET, HEAD, OPTIONS) are exempt
- */
 export const csrfProtection = (req, res, next) => {
   const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
 
@@ -79,7 +32,6 @@ export const csrfProtection = (req, res, next) => {
     return next();
   }
 
-  // Skip CSRF for auth endpoints that don't require it
   const csrfExemptPaths = [
     '/auth/login',
     '/auth/register',
@@ -95,12 +47,13 @@ export const csrfProtection = (req, res, next) => {
     return next();
   }
 
-  const csrfToken =
+  const headerToken =
     req.headers['x-csrf-token'] ||
-    req.headers['x-xsrf-token'] ||
-    req.cookies?.['XSRF-TOKEN'];
+    req.headers['x-xsrf-token'];
 
-  if (!validateCsrfToken(csrfToken)) {
+  const cookieToken = req.cookies?.['XSRF-TOKEN'];
+
+  if (!headerToken || !cookieToken || headerToken !== cookieToken) {
     logger.warn(`CSRF validation failed for ${req.method} ${req.path}`);
     return res.status(403).json({
       status: 'error',

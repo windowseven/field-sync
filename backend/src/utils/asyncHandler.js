@@ -3,14 +3,6 @@ import logger from './logger.js';
 export function asyncHandler(fn) {
   return (req, res, next) => {
     return Promise.resolve(fn(req, res, next)).catch((error) => {
-      if (error.name === 'ZodError') {
-        res.status(400).json({
-          status: 'error',
-          message: error.errors?.[0]?.message || 'Validation error',
-        });
-        return;
-      }
-
       const statusCode = error.statusCode || 500;
 
       logger.error(`${error.name}: ${error.message}`);
