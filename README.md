@@ -1,27 +1,55 @@
-# FieldSync
+# FieldSync 📍
 
-FieldSync is a full-stack, real-time field operations management platform built with Next.js 16, Node.js/Express, and MySQL.
+A real-time, role-based field operations management platform built for survey teams, census work, and community outreach in East Africa.
 
-**Full documentation is available in the [docs/](./docs/) directory.**
+🔗 **Live Demo:** [v0-modified-admindashboard-field-op.vercel.app](https://v0-modified-admindashboard-field-op.vercel.app)
 
-## Quick Links
+## Overview
 
-- [Documentation Index](./docs/INDEX.md) — Start here for the full reference
-- [Project Overview](./docs/01-project-overview/README.md) — Vision, scope, tech stack, routes, API, security
-- [Quick Start](./docs/01-project-overview/QUICK_START.md) — How to run the app
-- [Technical Inspection Report](./docs/02-architecture/TECHNICAL_INSPECTION_REPORT.md) — Full codebase review
-- [Security Audit](./docs/03-security/SECURITY_AUDIT.md) — Security architecture assessment
+FieldSync solves the coordination problem in field operations — supervisors lose visibility of what teams are doing once they leave the office. This platform gives every stakeholder a real-time view of operations with role-appropriate dashboards.
 
-## Documentation Structure
+## User Roles & Access
 
-| Part | Topic | Location |
-|------|-------|----------|
-| 1 | Project Overview | [01-project-overview/](./docs/01-project-overview/) |
-| 2 | Architecture & Technical Review | [02-architecture/](./docs/02-architecture/) |
-| 3 | Security | [03-security/](./docs/03-security/) |
-| 4 | Admin Dashboard | [04-admin-dashboard/](./docs/04-admin-dashboard/) |
-| 5 | Supervisor Dashboard | [05-supervisor-dashboard/](./docs/05-supervisor-dashboard/) |
-| 6 | Team Leader Dashboard | [06-team-leader-dashboard/](./docs/06-team-leader-dashboard/) |
-| 7 | Field Worker Dashboard | [07-field-worker-dashboard/](./docs/07-field-worker-dashboard/) |
-| 8 | System Maintenance | [08-maintenance/](./docs/08-maintenance/) |
-| 9 | Planning & Roadmap | [09-planning/](./docs/09-planning/) |
+| Role | Capabilities |
+|---|---|
+| **Admin** | Full system control, user management, project creation |
+| **Supervisor** | Project oversight, team assignment, progress monitoring |
+| **Team Leader** | Task management, field worker coordination |
+| **Field Worker** | Task execution, GPS check-in, data submission |
+
+## Features
+
+- 🗺️ Real-time location tracking and GPS check-in
+- 📊 Live dashboards per role
+- 📁 Project-based context system (`/supervisor/projects/[projectId]/*`)
+- 🔐 Full authentication & authorization module
+- 📱 Responsive design for field use on mobile
+- ⚡ WebSocket-powered real-time updates
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 14, TypeScript |
+| Styling | Tailwind CSS |
+| Real-time | Socket.io / WebSockets |
+| Auth | JWT, Role-based access control |
+| Deployment | Vercel |
+
+## Getting Started
+
+```bash
+git clone https://github.com/Windowseven/field-sync.git
+cd field-sync
+npm install
+npm run dev
+```
+
+## Screenshots
+
+> Dashboard previews available at the live demo link above.
+
+## Built By
+
+**Junior L. Malimi** — CS Student @ NIT Dar es Salaam, Tanzania  
+🌐 [Portfolio](https://my-portifolio-qk1s.onrender.com/)
